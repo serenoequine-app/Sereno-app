@@ -1,0 +1,2406 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="SERENO" />
+  <meta name="theme-color" content="#1a1612" />
+  <link rel="manifest" href="manifest.json" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
+  <title>SERENO</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    #loading { position:fixed; inset:0; background:#1a1612; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:9999; }
+    #loading img { width:200px; margin-bottom:20px; }
+    #loading p { color:#b8953a; font-family:sans-serif; font-size:14px; letter-spacing:0.1em; }
+    .dot { animation: blink 1.4s infinite both; }
+    .dot:nth-child(2) { animation-delay:.2s; }
+    .dot:nth-child(3) { animation-delay:.4s; }
+    @keyframes blink { 0%,80%,100%{opacity:0} 40%{opacity:1} }
+  </style>
+</head>
+<body>
+  <div id="loading">
+    <p>SERENO <span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></p>
+  </div>
+  <div id="root"></div>
+  <script>
+    // Hide loading when React mounts
+    const observer = new MutationObserver(() => {
+      if (document.getElementById('root').children.length > 0) {
+        document.getElementById('loading').style.display = 'none';
+        observer.disconnect();
+      }
+    });
+    observer.observe(document.getElementById('root'), {childList: true});
+  </script>
+  <script type="text/babel">
+const { useState, useRef, useCallback } = React;
+
+const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID";
+
+
+
+// ─── PALETTE & STYLES ───────────────────────────────────────────────────────
+const css = `
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #1a1612;
+    --parchment: #f5f0e8;
+    --cream: #faf7f2;
+    --sage: #7a8c6e;
+    --sage-light: #a8b89a;
+    --rust: #8b4a2f;
+    --rust-light: #c4785a;
+    --gold: #b8953a;
+    --gold-light: #d4af6a;
+    --stone: #c8bfb0;
+    --stone-dark: #8a7f72;
+    --shadow: rgba(26,22,18,0.12);
+  }
+
+  body { font-family: 'DM Sans', sans-serif; background: var(--parchment); color: var(--ink); }
+
+  .app { min-height: 100vh; display: flex; flex-direction: column; }
+
+  /* HEADER */
+  .header {
+    background: var(--ink);
+    color: var(--parchment);
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 3px solid var(--gold);
+  }
+  .header-brand { display: flex; align-items: center; gap: 14px; }
+  .header-logo {
+    width: 42px; height: 42px;
+    background: var(--gold);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+  }
+  .header-title { font-family: 'Cormorant Garamond', serif; font-size: 26px; font-weight: 600; letter-spacing: 0.04em; }
+  .header-sub { font-size: 11px; color: var(--stone); letter-spacing: 0.12em; text-transform: uppercase; margin-top: 2px; }
+  .header-cal-btn {
+    background: transparent;
+    border: 1px solid var(--gold);
+    color: var(--gold);
+    padding: 7px 16px;
+    border-radius: 4px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .header-cal-btn:hover { background: var(--gold); color: var(--ink); }
+  .header-cal-btn.connected { border-color: var(--sage); color: var(--sage); }
+  .header-cal-btn.connected:hover { background: var(--sage); color: white; }
+
+  /* BREADCRUMB */
+  .breadcrumb {
+    background: var(--cream);
+    border-bottom: 1px solid var(--stone);
+    padding: 10px 32px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--stone-dark);
+  }
+  .breadcrumb span { cursor: pointer; transition: color 0.15s; }
+  .breadcrumb span:hover { color: var(--rust); }
+  .breadcrumb .active { color: var(--ink); font-weight: 500; cursor: default; }
+  .breadcrumb .sep { color: var(--stone); }
+
+  /* MAIN */
+  .main { flex: 1; padding: 32px; max-width: 1100px; margin: 0 auto; width: 100%; }
+
+  /* SECTION TITLE */
+  .section-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 30px;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 6px;
+  }
+  .section-sub { font-size: 13px; color: var(--stone-dark); margin-bottom: 28px; }
+
+  /* CARDS GRID */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 20px; }
+
+  /* HARAS CARD */
+  .haras-card {
+    background: white;
+    border: 1px solid var(--stone);
+    border-radius: 8px;
+    padding: 24px 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .haras-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: var(--gold);
+  }
+  .haras-card:hover { border-color: var(--gold); box-shadow: 0 6px 24px var(--shadow); transform: translateY(-2px); }
+  .haras-card-name { font-family: 'Cormorant Garamond', serif; font-size: 20px; font-weight: 600; margin-bottom: 8px; }
+  .haras-card-count { font-size: 12px; color: var(--stone-dark); }
+  .haras-card-icon { font-size: 28px; margin-bottom: 12px; }
+
+  /* ADD BUTTON */
+  .btn-add {
+    background: var(--ink);
+    color: var(--parchment);
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.2s;
+    margin-bottom: 24px;
+  }
+  .btn-add:hover { background: var(--rust); }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--ink);
+    border: 1px solid var(--stone);
+    padding: 9px 18px;
+    border-radius: 6px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-secondary:hover { border-color: var(--ink); }
+
+  /* MARE CARD */
+  .mare-card {
+    background: white;
+    border: 1px solid var(--stone);
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .mare-card:hover { border-color: var(--sage); box-shadow: 0 6px 24px var(--shadow); transform: translateY(-2px); }
+  .mare-photo {
+    width: 100%; height: 140px; object-fit: cover;
+    background: var(--parchment);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 48px; color: var(--stone);
+  }
+  .mare-photo img { width: 100%; height: 140px; object-fit: cover; }
+  .mare-info { padding: 14px 16px; }
+  .mare-name { font-family: 'Cormorant Garamond', serif; font-size: 18px; font-weight: 600; }
+  .mare-breed { font-size: 12px; color: var(--stone-dark); margin-top: 2px; }
+  .mare-tags { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .tag {
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .tag-gyn { background: #e8f0e4; color: var(--sage); }
+  .tag-gest { background: #fef3e2; color: var(--gold); }
+  .tag-neo { background: #fde8e0; color: var(--rust); }
+  .tag-rec { background: #e8e4f0; color: #6a5a8b; }
+
+  .ficha-tab.active-rec { color: #6a5a8b; border-bottom-color: #6a5a8b; }
+
+  .rec-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #f0edf8; border: 1px solid #c8bfe0;
+    border-radius: 6px; padding: 6px 12px;
+    font-size: 12px; color: #6a5a8b; font-weight: 500;
+    margin-top: 8px;
+  }
+
+  .donante-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #f0f5ee; border: 1px solid #b8cdb0;
+    border-radius: 6px; padding: 6px 12px;
+    font-size: 12px; color: var(--sage); font-weight: 500;
+    margin-top: 8px; cursor: pointer; transition: background 0.15s;
+  }
+  .donante-link:hover { background: #e0edd8; }
+
+  /* MARE DETAIL */
+  .mare-detail-header {
+    display: flex;
+    gap: 28px;
+    align-items: flex-start;
+    margin-bottom: 32px;
+    background: white;
+    border: 1px solid var(--stone);
+    border-radius: 10px;
+    padding: 24px;
+  }
+  .mare-detail-photo {
+    width: 140px; height: 140px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--parchment);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 56px; color: var(--stone);
+    flex-shrink: 0;
+    position: relative;
+    cursor: pointer;
+  }
+  .mare-detail-photo img { width: 100%; height: 100%; object-fit: cover; }
+  .photo-overlay {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity 0.2s;
+    font-size: 13px; color: white; font-weight: 500;
+    flex-direction: column; gap: 4px;
+  }
+  .mare-detail-photo:hover .photo-overlay { opacity: 1; }
+  .mare-detail-info { flex: 1; }
+  .mare-detail-name { font-family: 'Cormorant Garamond', serif; font-size: 32px; font-weight: 600; margin-bottom: 4px; }
+  .mare-detail-meta { font-size: 13px; color: var(--stone-dark); margin-bottom: 16px; }
+  .meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .meta-item label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--stone-dark); display: block; margin-bottom: 2px; }
+  .meta-item span { font-size: 14px; font-weight: 500; }
+
+  /* FICHAS TABS */
+  .fichas-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 24px;
+    border-bottom: 2px solid var(--stone);
+  }
+  .ficha-tab {
+    padding: 12px 24px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: var(--stone-dark);
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+    font-family: 'DM Sans', sans-serif;
+    letter-spacing: 0.04em;
+  }
+  .ficha-tab:hover { color: var(--ink); }
+  .ficha-tab.active-gyn { color: var(--sage); border-bottom-color: var(--sage); }
+  .ficha-tab.active-gest { color: var(--gold); border-bottom-color: var(--gold); }
+  .ficha-tab.active-neo { color: var(--rust); border-bottom-color: var(--rust); }
+
+  /* FORM */
+  .ficha-panel {
+    background: white;
+    border: 1px solid var(--stone);
+    border-radius: 10px;
+    padding: 28px;
+  }
+  .ficha-section-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--ink);
+    margin: 24px 0 14px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--stone);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .ficha-section-title:first-child { margin-top: 0; }
+  .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .form-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-group.full { grid-column: 1 / -1; }
+  .form-group label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--stone-dark); font-weight: 500; }
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    border: 1px solid var(--stone);
+    border-radius: 5px;
+    padding: 9px 12px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    color: var(--ink);
+    background: var(--cream);
+    transition: border-color 0.15s;
+    width: 100%;
+  }
+  .form-group input:focus,
+  .form-group select:focus,
+  .form-group textarea:focus {
+    outline: none;
+    border-color: var(--sage);
+    background: white;
+  }
+  .form-group textarea { resize: vertical; min-height: 80px; }
+  .form-group input[type="checkbox"] { width: auto; }
+  .checkbox-row { display: flex; align-items: center; gap: 8px; flex-direction: row; margin-top: 4px; }
+  .checkbox-row label { text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--ink); }
+
+  /* ECO TABLE */
+  .eco-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 4px; }
+  .eco-table th {
+    background: var(--parchment);
+    padding: 8px 10px;
+    text-align: left;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--stone-dark);
+    border: 1px solid var(--stone);
+    font-weight: 500;
+  }
+  .eco-table td {
+    border: 1px solid var(--stone);
+    padding: 0;
+  }
+  .eco-table td input {
+    border: none;
+    background: transparent;
+    padding: 7px 10px;
+    width: 100%;
+    font-size: 12px;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .eco-table td input:focus { outline: none; background: #fffbe8; }
+  .btn-table-add {
+    margin-top: 8px;
+    font-size: 12px;
+    padding: 5px 12px;
+    border: 1px dashed var(--stone);
+    background: transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--stone-dark);
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.15s;
+  }
+  .btn-table-add:hover { border-color: var(--sage); color: var(--sage); }
+
+  /* SAVE / CAL ACTIONS */
+  .ficha-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 28px;
+    padding-top: 20px;
+    border-top: 1px solid var(--stone);
+  }
+  .btn-cal {
+    background: #1a73e8;
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 8px;
+    transition: background 0.2s;
+  }
+  .btn-cal:hover { background: #1558c0; }
+  .btn-save {
+    background: var(--sage);
+    color: white;
+    border: none;
+    padding: 10px 22px;
+    border-radius: 6px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 8px;
+    transition: background 0.2s;
+  }
+  .btn-save:hover { background: #5a6e50; }
+
+  /* MODAL */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(26,22,18,0.55);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+  }
+  .modal {
+    background: white;
+    border-radius: 10px;
+    padding: 28px;
+    width: 100%;
+    max-width: 460px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  }
+  .modal-title { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 600; margin-bottom: 20px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+
+  /* TOAST */
+  .toast {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    background: var(--ink);
+    color: var(--parchment);
+    padding: 12px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    z-index: 2000;
+    display: flex; align-items: center; gap: 10px;
+    box-shadow: 0 8px 24px var(--shadow);
+    animation: slideUp 0.3s ease;
+  }
+  .toast.success { border-left: 4px solid var(--sage); }
+  .toast.cal { border-left: 4px solid #1a73e8; }
+  @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  /* EMPTY STATE */
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--stone-dark);
+  }
+  .empty-icon { font-size: 52px; margin-bottom: 16px; }
+  .empty-title { font-family: 'Cormorant Garamond', serif; font-size: 22px; margin-bottom: 8px; color: var(--ink); }
+  .empty-sub { font-size: 13px; }
+
+  .delete-btn {
+    background: transparent;
+    border: none;
+    color: var(--stone-dark);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 4px;
+    transition: color 0.15s;
+    margin-left: auto;
+  }
+  .delete-btn:hover { color: var(--rust); }
+
+
+  /* INTERNACION */
+  .nav-tabs {
+    display: flex;
+    gap: 0;
+    background: var(--ink);
+    padding: 0 32px;
+    border-bottom: 3px solid var(--gold);
+  }
+  .nav-tab {
+    padding: 12px 20px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: var(--stone);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    font-family: 'DM Sans', sans-serif;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -3px;
+  }
+  .nav-tab:hover { color: var(--parchment); }
+  .nav-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+  .int-card {
+    background: white;
+    border: 1px solid var(--stone);
+    border-radius: 8px;
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .int-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: var(--rust);
+  }
+  .int-card:hover { border-color: var(--rust); box-shadow: 0 6px 24px var(--shadow); transform: translateY(-2px); }
+  .int-card-name { font-family: 'Cormorant Garamond', serif; font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  .int-card-meta { font-size: 12px; color: var(--stone-dark); margin-bottom: 10px; }
+  .int-badge {
+    display: inline-block;
+    font-size: 10px; font-weight: 600;
+    padding: 2px 8px; border-radius: 20px;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .int-badge-activa { background: #fde8e0; color: var(--rust); }
+  .int-badge-alta { background: #e8f0e4; color: var(--sage); }
+
+  .diario-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 4px; }
+  .diario-table th {
+    background: var(--parchment); padding: 8px 10px;
+    text-align: left; font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--stone-dark);
+    border: 1px solid var(--stone); font-weight: 500;
+  }
+  .diario-table td { border: 1px solid var(--stone); padding: 0; }
+  .diario-table td input, .diario-table td select, .diario-table td textarea {
+    border: none; background: transparent;
+    padding: 6px 8px; width: 100%;
+    font-size: 12px; font-family: 'DM Sans', sans-serif;
+  }
+  .diario-table td input:focus, .diario-table td select:focus { outline: none; background: #fffbe8; }
+
+  /* ESTADÍSTICAS */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin-bottom: 32px; }
+  .stat-card {
+    background: white; border: 1px solid var(--stone);
+    border-radius: 10px; padding: 20px;
+  }
+  .stat-card-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 16px; font-weight: 600;
+    color: var(--stone-dark); margin-bottom: 16px;
+    display: flex; align-items: center; gap: 8px;
+    border-bottom: 1px solid var(--stone); padding-bottom: 10px;
+  }
+  .stat-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .stat-bar-label { font-size: 12px; color: var(--ink); min-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stat-bar-track { flex: 1; background: var(--parchment); border-radius: 20px; height: 10px; overflow: hidden; }
+  .stat-bar-fill { height: 100%; border-radius: 20px; transition: width 0.5s ease; }
+  .stat-bar-pct { font-size: 11px; font-weight: 600; min-width: 36px; text-align: right; }
+  .stat-big { font-family: 'Cormorant Garamond', serif; font-size: 48px; font-weight: 600; color: var(--sage); text-align: center; padding: 10px 0; }
+  .stat-big-label { font-size: 12px; color: var(--stone-dark); text-align: center; margin-top: -8px; }
+  .stat-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .stat-table th { background: var(--parchment); padding: 7px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--stone-dark); border-bottom: 1px solid var(--stone); }
+  .stat-table td { padding: 8px 10px; border-bottom: 1px solid var(--parchment); }
+  .stat-table tr:last-child td { border-bottom: none; }
+  .badge-pos { background: #e8f0e4; color: var(--sage); font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+  .badge-neg { background: #fde8e0; color: var(--rust); font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+  .badge-pend { background: var(--parchment); color: var(--stone-dark); font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+
+  .history-badge {  .history-badge {
+    font-size: 10px;
+    background: var(--parchment);
+    border: 1px solid var(--stone);
+    border-radius: 20px;
+    padding: 2px 8px;
+    color: var(--stone-dark);
+    margin-left: 8px;
+  }
+`;
+
+// ─── INITIAL DATA ─────────────────────────────────────────────────────────────
+const INITIAL_HARAS = [{"id": 1, "name": "Windcrest", "mares": [{"id": 100, "name": "Princess Special", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [{"fecha": "2025-11-02", "padrillo": "Conthargos", "tecnica": "TE", "donanteNombre": "", "donanteCentro": "", "protocolo": "", "dosis": "", "laboratorio": "", "ecoRows": [{"fecha": "2025-11-02", "ovIzq": "29 mm", "ovDer": "29 mm", "utero": "2", "cervix": "", "obs": ""}, {"fecha": "2025-11-08", "ovIzq": "38 mm", "ovDer": "", "utero": "3", "cervix": "", "obs": "strelin 22hs"}, {"fecha": "2025-11-22", "ovIzq": "ME", "ovDer": "30 mm", "utero": "1", "cervix": "", "obs": ""}, {"fecha": "2025-11-26", "ovIzq": "31 mm", "ovDer": "41 mm", "utero": "1", "cervix": "", "obs": "strelin 11hs"}, {"fecha": "2025-11-28", "ovIzq": "fol", "ovDer": "fol", "utero": "1", "cervix": "", "obs": ""}, {"fecha": "2025-12-02", "ovIzq": "CL", "ovDer": "CL", "utero": "0", "cervix": "", "obs": "TAP Conthargos - Dexa"}, {"fecha": "2025-12-14", "ovIzq": "fol", "ovDer": "fol", "utero": "1", "cervix": "", "obs": "TAP Diarado 2pg - strelin 14/12 22hs"}, {"fecha": "2025-12-22", "ovIzq": "", "ovDer": "", "utero": "0", "cervix": "", "obs": "Flushing"}, {"fecha": "2025-12-27", "ovIzq": "a", "ovDer": "a", "utero": "1", "cervix": "", "obs": ""}, {"fecha": "2026-01-07", "ovIzq": "MF", "ovDer": "MF", "utero": "1", "cervix": "", "obs": ""}, {"fecha": "2026-01-12", "ovIzq": "fol", "ovDer": "fol", "utero": "0", "cervix": "", "obs": "IAP Diarado - Flushing"}, {"fecha": "2026-01-28", "ovIzq": "", "ovDer": "ovul", "utero": "1", "cervix": "", "obs": "IAP Bola 1p - Floxagen 30ml 3 días"}, {"fecha": "2026-02-07", "ovIzq": "ch", "ovDer": "ch", "utero": "1", "cervix": "", "obs": ""}, {"fecha": "2026-02-10", "ovIzq": "36 mm", "ovDer": "", "utero": "1", "cervix": "", "obs": "Preñez ok"}], "induccionOvulacion": true, "productoInduccion": "Strelin", "fechaInduccion": "2025-11-08", "horarioInduccion": "22:00", "fechaServicio": "2025-11-08", "fechaOvulacion": "2025-11-09", "eco1": "", "resultado1": "", "eco2": "", "resultado2": "", "eco3": "", "resultado3": "", "transferencia": true, "receptora": "184 M", "fechaTE": "2025-11-08", "observaciones": "Múltiples ciclos TE/ICSI. Receptoras: 77M, 140M, 55M, 184M, 213H, 879M, 1020M. Floxagen para infección. Preñez ok confirmada feb26."}], "gest": [{"fechaOvulacion": "2025-09-16", "fechaParto": "2026-08-27", "padrillo": "Conthargos", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-02-16", "mes5obs": "Rhino 1", "mes7fecha": "2026-04-16", "mes7obs": "Rhino 2", "mes9fecha": "2026-06-16", "mes9obs": "Rhino 3", "preparto45fecha": "2026-07-13", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-08-12", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: ICSI | Rx: 77 M"}, {"fechaOvulacion": "2025-09-26", "fechaParto": "2026-09-06", "padrillo": "Diamant de Semilly", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-02-26", "mes5obs": "Rhino 1", "mes7fecha": "2026-04-26", "mes7obs": "Rhino 2", "mes9fecha": "2026-06-26", "mes9obs": "Rhino 3", "preparto45fecha": "2026-07-23", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-08-22", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: ICSI | Rx: 140 M"}, {"fechaOvulacion": "2025-10-31", "fechaParto": "2026-10-11", "padrillo": "Conthargos", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-03-31", "mes5obs": "Rhino 1", "mes7fecha": "2026-05-31", "mes7obs": "Rhino 2", "mes9fecha": "2026-07-31", "mes9obs": "Rhino 3", "preparto45fecha": "2026-08-27", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-09-26", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: ICSI | Rx: 55 M"}, {"fechaOvulacion": "2025-11-08", "fechaParto": "2026-10-19", "padrillo": "Conthargos", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-04-08", "mes5obs": "Rhino 1", "mes7fecha": "2026-06-08", "mes7obs": "Rhino 2", "mes9fecha": "2026-08-08", "mes9obs": "Rhino 3", "preparto45fecha": "2026-09-04", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-10-04", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: TE | Rx: 184 M"}, {"fechaOvulacion": "2025-11-28", "fechaParto": "2026-11-08", "padrillo": "Conthargos", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-04-28", "mes5obs": "Rhino 1", "mes7fecha": "2026-06-28", "mes7obs": "Rhino 2", "mes9fecha": "2026-08-28", "mes9obs": "Rhino 3", "preparto45fecha": "2026-09-24", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-10-24", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: TE | Rx: 213 H"}, {"fechaOvulacion": "2025-11-28", "fechaParto": "2026-11-08", "padrillo": "Conthargos", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-04-28", "mes5obs": "Rhino 1", "mes7fecha": "2026-06-28", "mes7obs": "Rhino 2", "mes9fecha": "2026-08-28", "mes9obs": "Rhino 3", "preparto45fecha": "2026-09-24", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-10-24", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: TE | Rx: 879 M"}, {"fechaOvulacion": "2025-12-14", "fechaParto": "2026-11-24", "padrillo": "Diarado", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-05-14", "mes5obs": "Rhino 1", "mes7fecha": "2026-07-14", "mes7obs": "Rhino 2", "mes9fecha": "2026-09-14", "mes9obs": "Rhino 3", "preparto45fecha": "2026-10-10", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-11-09", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: TE | Rx: 1020 M"}, {"fechaOvulacion": "2026-01-11", "fechaParto": "2026-12-22", "padrillo": "Diarado", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-06-11", "mes5obs": "Rhino 1", "mes7fecha": "2026-08-11", "mes7obs": "Rhino 2", "mes9fecha": "2026-10-11", "mes9obs": "Rhino 3", "preparto45fecha": "2026-11-07", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-12-07", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: TE | Rx: 805 M"}], "neo": [], "rec": []}, {"id": 101, "name": "Casasha", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [{"fecha": "2025-10-30", "padrillo": "Ermitage Kalone", "tecnica": "IA", "donanteNombre": "", "donanteCentro": "", "protocolo": "", "dosis": "", "laboratorio": "", "ecoRows": [{"fecha": "2025-10-30", "ovIzq": "32 mm", "ovDer": "30 mm", "utero": "1", "cervix": "", "obs": ""}, {"fecha": "2025-11-02", "ovIzq": "US mm", "ovDer": "", "utero": "3", "cervix": "", "obs": "Cx A - dest 22hs"}, {"fecha": "2025-11-06", "ovIzq": "a", "ovDer": "", "utero": "0", "cervix": "", "obs": "lavaje + Ceftio Reg"}, {"fecha": "2025-11-14", "ovIzq": "", "ovDer": "", "utero": "0", "cervix": "", "obs": "VACIA → PRENADA"}, {"fecha": "2026-01-03", "ovIzq": "", "ovDer": "", "utero": "0", "cervix": "", "obs": "Preñez 60 días OK"}], "induccionOvulacion": true, "productoInduccion": "Strelin", "fechaInduccion": "2025-11-02", "horarioInduccion": "22:00", "fechaServicio": "2025-11-05", "fechaOvulacion": "2025-11-05", "eco1": "", "resultado1": "Positivo ✓", "eco2": "", "resultado2": "Positivo ✓", "eco3": "", "resultado3": "Positivo ✓", "transferencia": false, "receptora": "", "fechaTE": "", "observaciones": "Lavaje uterino + Ceftio. Preñez confirmada. Control 60 días OK (3/1/26)."}], "gest": [{"fechaOvulacion": "2025-11-05", "fechaParto": "2026-10-16", "padrillo": "Ermitage Kalone", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-04-05", "mes5obs": "Rhino 1", "mes7fecha": "2026-06-05", "mes7obs": "Rhino 2", "mes9fecha": "2026-08-05", "mes9obs": "Rhino 3", "preparto45fecha": "2026-09-01", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-10-01", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: IA"}], "neo": [], "rec": []}, {"id": 102, "name": "Pandora", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [{"fecha": "2025-12-22", "padrillo": "Conthargos", "tecnica": "TE", "donanteNombre": "", "donanteCentro": "", "protocolo": "", "dosis": "", "laboratorio": "", "ecoRows": [{"fecha": "2025-12-22", "ovIzq": "", "ovDer": "34 mm", "utero": "1", "cervix": "", "obs": ""}, {"fecha": "2025-12-24", "ovIzq": "32 ME", "ovDer": "38 mm", "utero": "2", "cervix": "", "obs": "strelin"}, {"fecha": "2025-12-25", "ovIzq": "CL", "ovDer": "", "utero": "0", "cervix": "", "obs": "TAP Conthargos - Mauran"}, {"fecha": "2026-01-07", "ovIzq": "32 mm", "ovDer": "32 mm", "utero": "1", "cervix": "", "obs": "Flushing"}, {"fecha": "2026-01-09", "ovIzq": "40 mm", "ovDer": "36 mm", "utero": "1", "cervix": "", "obs": "strelin 22hs"}, {"fecha": "2026-01-12", "ovIzq": "fol", "ovDer": "fol", "utero": "1", "cervix": "", "obs": "IAP Diarado 2pg"}], "induccionOvulacion": true, "productoInduccion": "Strelin", "fechaInduccion": "2025-12-24", "horarioInduccion": "22:00", "fechaServicio": "2025-12-25", "fechaOvulacion": "2025-12-25", "eco1": "", "resultado1": "", "eco2": "", "resultado2": "", "eco3": "", "resultado3": "", "transferencia": true, "receptora": "A39 M", "fechaTE": "2025-12-25", "observaciones": "Receptora A39M. Flushing. Segunda TE 11/1 receptora R360H con Dominator Z."}], "gest": [{"fechaOvulacion": "2025-12-25", "fechaParto": "2026-12-05", "padrillo": "Conthargos", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-05-25", "mes5obs": "Rhino 1", "mes7fecha": "2026-07-25", "mes7obs": "Rhino 2", "mes9fecha": "2026-09-25", "mes9obs": "Rhino 3", "preparto45fecha": "2026-10-21", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-11-20", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: TE | Rx: A39 M"}, {"fechaOvulacion": "2026-01-11", "fechaParto": "2026-12-22", "padrillo": "Dominator Z", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-06-11", "mes5obs": "Rhino 1", "mes7fecha": "2026-08-11", "mes7obs": "Rhino 2", "mes9fecha": "2026-10-11", "mes9obs": "Rhino 3", "preparto45fecha": "2026-11-07", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-12-07", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: TE | Rx: R360 H"}], "neo": [], "rec": []}, {"id": 103, "name": "Recontha", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [{"fecha": "2025-11-14", "padrillo": "Dominator Z", "tecnica": "TE", "donanteNombre": "", "donanteCentro": "", "protocolo": "", "dosis": "", "laboratorio": "", "ecoRows": [{"fecha": "2025-11-26", "ovIzq": "44 mm", "ovDer": "", "utero": "1", "cervix": "", "obs": "Cx A"}, {"fecha": "2025-12-09", "ovIzq": "37 mm", "ovDer": "", "utero": "2", "cervix": "", "obs": "strelin 10/12 22hs"}, {"fecha": "2025-12-13", "ovIzq": "", "ovDer": "a", "utero": "0", "cervix": "", "obs": "ut sted aire - Linea OXF"}, {"fecha": "2025-12-21", "ovIzq": "", "ovDer": "CL", "utero": "0", "cervix": "", "obs": "IAP Everald 1py - Flushing"}, {"fecha": "2025-12-27", "ovIzq": "39 mm", "ovDer": "37 mm", "utero": "1", "cervix": "", "obs": ""}, {"fecha": "2025-12-28", "ovIzq": "", "ovDer": "", "utero": "3", "cervix": "", "obs": "IAP Dominator - Strelin"}, {"fecha": "2026-02-05", "ovIzq": "", "ovDer": "", "utero": "0", "cervix": "", "obs": "Preñez ok"}], "induccionOvulacion": true, "productoInduccion": "Strelin", "fechaInduccion": "2025-12-09", "horarioInduccion": "22:00", "fechaServicio": "2025-12-27", "fechaOvulacion": "2025-12-28", "eco1": "", "resultado1": "", "eco2": "", "resultado2": "Positivo ✓", "eco3": "", "resultado3": "", "transferencia": true, "receptora": "308 H", "fechaTE": "2025-12-27", "observaciones": "Receptora 308H. Flushing + lavaje. Preñez ok feb26."}], "gest": [{"fechaOvulacion": "2025-12-27", "fechaParto": "2026-12-07", "padrillo": "Dominator Z", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-05-27", "mes5obs": "Rhino 1", "mes7fecha": "2026-07-27", "mes7obs": "Rhino 2", "mes9fecha": "2026-09-27", "mes9obs": "Rhino 3", "preparto45fecha": "2026-10-23", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-11-22", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: TE | Rx: 308 H"}], "neo": [], "rec": []}, {"id": 104, "name": "Quintefy", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [{"fecha": "2025-10-30", "padrillo": "Ollister Z", "tecnica": "IA", "donanteNombre": "", "donanteCentro": "", "protocolo": "", "dosis": "", "laboratorio": "", "ecoRows": [{"fecha": "2025-10-30", "ovIzq": "45 mm", "ovDer": "", "utero": "1", "cervix": "", "obs": ""}, {"fecha": "2025-11-14", "ovIzq": "", "ovDer": "37/a", "utero": "0", "cervix": "", "obs": "PG - strelin 20/11 22:45"}, {"fecha": "2025-11-22", "ovIzq": "", "ovDer": "43 mm", "utero": "1", "cervix": "", "obs": ""}, {"fecha": "2025-12-09", "ovIzq": "35 mm", "ovDer": "", "utero": "1", "cervix": "", "obs": "strelin 10/12 22hs"}, {"fecha": "2025-12-13", "ovIzq": "", "ovDer": "fol", "utero": "0", "cervix": "", "obs": "ut sted"}, {"fecha": "2025-12-28", "ovIzq": "36 mm", "ovDer": "41 mm", "utero": "0", "cervix": "", "obs": "IAP Ollister + Strelin"}, {"fecha": "2026-01-12", "ovIzq": "", "ovDer": "", "utero": "0", "cervix": "", "obs": "Mellizos → reducción"}, {"fecha": "2026-02-10", "ovIzq": "", "ovDer": "", "utero": "0", "cervix": "", "obs": "Preñez ok"}], "induccionOvulacion": true, "productoInduccion": "Strelin", "fechaInduccion": "2025-12-09", "horarioInduccion": "22:00", "fechaServicio": "2025-12-28", "fechaOvulacion": "2025-12-29", "eco1": "", "resultado1": "", "eco2": "", "resultado2": "Positivo ✓", "eco3": "", "resultado3": "", "transferencia": false, "receptora": "", "fechaTE": "", "observaciones": "Mellizos detectados 12/1/26 → reducción apek 1. Preñez ok feb26. Anemia tratada (30/3)."}], "gest": [{"fechaOvulacion": "2025-12-28", "fechaParto": "2026-12-08", "padrillo": "Ollister Z", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-05-28", "mes5obs": "Rhino 1", "mes7fecha": "2026-07-28", "mes7obs": "Rhino 2", "mes9fecha": "2026-09-28", "mes9obs": "Rhino 3", "preparto45fecha": "2026-10-24", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-11-23", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: IA"}], "neo": [], "rec": []}, {"id": 200, "name": "Charon", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [{"fecha": "2025-11-02", "padrillo": "", "tecnica": "IA", "donanteNombre": "", "donanteCentro": "", "protocolo": "", "dosis": "", "laboratorio": "", "ecoRows": [{"fecha": "2025-11-02", "ovIzq": "34 mm", "ovDer": "38 mm", "utero": "1", "cervix": "", "obs": "dest 22hs - PG"}, {"fecha": "2025-11-06", "ovIzq": "", "ovDer": "C", "utero": "0", "cervix": "", "obs": "OXT"}, {"fecha": "2025-11-14", "ovIzq": "", "ovDer": "", "utero": "0", "cervix": "", "obs": "ut con ruido - lavaje negativo"}, {"fecha": "2025-11-22", "ovIzq": "37 mm", "ovDer": "", "utero": "3", "cervix": "", "obs": "strelin 21hs"}, {"fecha": "2025-11-24", "ovIzq": "fol", "ovDer": "", "utero": "2", "cervix": "", "obs": "IAP Conthargos 1py"}, {"fecha": "2025-11-26", "ovIzq": "a", "ovDer": "", "utero": "0", "cervix": "", "obs": ""}, {"fecha": "2025-12-07", "ovIzq": "MF", "ovDer": "MF - 33 mm", "utero": "1", "cervix": "", "obs": ""}, {"fecha": "2026-01-22", "ovIzq": "", "ovDer": "41 mm", "utero": "3", "cervix": "", "obs": "strelin 22hs"}, {"fecha": "2026-01-24", "ovIzq": "fol", "ovDer": "fol - 27 mm", "utero": "1", "cervix": "", "obs": "IAP Ollister + strelin"}, {"fecha": "2026-01-26", "ovIzq": "", "ovDer": "a", "utero": "0", "cervix": "", "obs": ""}, {"fecha": "2026-02-07", "ovIzq": "26 mm", "ovDer": "ufc", "utero": "0", "cervix": "", "obs": ""}, {"fecha": "2026-02-10", "ovIzq": "38 mm", "ovDer": "", "utero": "1", "cervix": "", "obs": "Cx A"}], "induccionOvulacion": false, "productoInduccion": "", "fechaInduccion": "", "horarioInduccion": "", "fechaServicio": "2025-11-24", "fechaOvulacion": "2025-11-25", "eco1": "", "resultado1": "", "eco2": "", "resultado2": "Positivo ✓", "eco3": "", "resultado3": "", "transferencia": false, "receptora": "", "fechaTE": "", "observaciones": "Pushing negativo 2/12. Preñez confirmada feb26. Cultivo uterino realizado."}], "gest": [], "neo": [], "rec": []}, {"id": 201, "name": "Heartlys", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [{"fecha": "2025-10-11", "padrillo": "Conkano", "tecnica": "IA", "donanteNombre": "", "donanteCentro": "", "protocolo": "", "dosis": "", "laboratorio": "", "ecoRows": [{"fecha": "2025-10-11", "ovIzq": "ab", "ovDer": "MF", "utero": "1", "cervix": "", "obs": "Cx A - Flushing"}, {"fecha": "2025-10-17", "ovIzq": "", "ovDer": "34 mm", "utero": "1", "cervix": "", "obs": "Preñez CD 1.4mm"}, {"fecha": "2025-11-02", "ovIzq": "", "ovDer": "32 mm", "utero": "1", "cervix": "", "obs": ""}, {"fecha": "2025-11-06", "ovIzq": "", "ovDer": "42 mm", "utero": "3", "cervix": "", "obs": "strelin 22:45"}, {"fecha": "2025-11-08", "ovIzq": "", "ovDer": "46 mm", "utero": "1", "cervix": "", "obs": "IAP Corkano 2py - strelin 22hs"}, {"fecha": "2025-11-22", "ovIzq": "25 mm", "ovDer": "MF", "utero": "1", "cervix": "", "obs": ""}, {"fecha": "2025-11-26", "ovIzq": "", "ovDer": "50 mm", "utero": "1", "cervix": "", "obs": "strelin 11hs"}, {"fecha": "2025-11-28", "ovIzq": "fol", "ovDer": "", "utero": "1", "cervix": "", "obs": "ZAP Condy + Montuel"}, {"fecha": "2025-12-14", "ovIzq": "fol", "ovDer": "fol", "utero": "0", "cervix": "", "obs": "TAP Condy 2py - strelin 22hs"}, {"fecha": "2025-12-22", "ovIzq": "", "ovDer": "", "utero": "0", "cervix": "", "obs": "Flushing - cultivo utero"}, {"fecha": "2025-12-27", "ovIzq": "36 mm", "ovDer": "CL", "utero": "0", "cervix": "", "obs": "strelin Jonings 28 10mm"}, {"fecha": "2026-01-07", "ovIzq": "", "ovDer": "", "utero": "1", "cervix": "", "obs": "Flushing - Floxagen"}, {"fecha": "2026-02-05", "ovIzq": "", "ovDer": "", "utero": "0", "cervix": "", "obs": "Preñez ok"}], "induccionOvulacion": true, "productoInduccion": "Strelin", "fechaInduccion": "2025-11-08", "horarioInduccion": "22:00", "fechaServicio": "2025-11-08", "fechaOvulacion": "2025-11-09", "eco1": "", "resultado1": "", "eco2": "", "resultado2": "", "eco3": "", "resultado3": "", "transferencia": false, "receptora": "", "fechaTE": "", "observaciones": "Flushing y cultivo uterino. Floxagen infección ocular. Preñez confirmada feb26."}], "gest": [], "neo": [], "rec": []}]}, {"id": 2, "name": "La Carlota del Monte", "mares": [{"id": 105, "name": "Luz", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2025-10-04", "fechaParto": "2026-09-14", "padrillo": "Cocorito", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-03-04", "mes5obs": "Rhino 1", "mes7fecha": "2026-05-04", "mes7obs": "Rhino 2", "mes9fecha": "2026-07-04", "mes9obs": "Rhino 3", "preparto45fecha": "2026-07-31", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-08-30", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: IA"}], "neo": [], "rec": []}, {"id": 106, "name": "Paloma", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2025-10-19", "fechaParto": "2026-09-29", "padrillo": "Anda a saber", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-03-19", "mes5obs": "Rhino 1", "mes7fecha": "2026-05-19", "mes7obs": "Rhino 2", "mes9fecha": "2026-07-19", "mes9obs": "Rhino 3", "preparto45fecha": "2026-08-15", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-09-14", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: IA"}], "neo": [], "rec": []}, {"id": 107, "name": "Tita", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2025-12-12", "fechaParto": "2026-11-22", "padrillo": "Sparky", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-05-12", "mes5obs": "Rhino 1", "mes7fecha": "2026-07-12", "mes7obs": "Rhino 2", "mes9fecha": "2026-09-12", "mes9obs": "Rhino 3", "preparto45fecha": "2026-10-08", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-11-07", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: IA"}], "neo": [], "rec": []}, {"id": 108, "name": "Pina", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2025-12-12", "fechaParto": "2026-11-22", "padrillo": "Sparky", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-05-12", "mes5obs": "Rhino 1", "mes7fecha": "2026-07-12", "mes7obs": "Rhino 2", "mes9fecha": "2026-09-12", "mes9obs": "Rhino 3", "preparto45fecha": "2026-10-08", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-11-07", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: IA"}], "neo": [], "rec": []}, {"id": 109, "name": "Storyland", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2025-12-23", "fechaParto": "2026-12-03", "padrillo": "Crown Bogart", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-05-23", "mes5obs": "Rhino 1", "mes7fecha": "2026-07-23", "mes7obs": "Rhino 2", "mes9fecha": "2026-09-23", "mes9obs": "Rhino 3", "preparto45fecha": "2026-10-19", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-11-18", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: IA"}], "neo": [], "rec": []}, {"id": 110, "name": "Quan Lady", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2026-01-04", "fechaParto": "2026-12-15", "padrillo": "Crown Bogart", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-06-04", "mes5obs": "Rhino 1", "mes7fecha": "2026-08-04", "mes7obs": "Rhino 2", "mes9fecha": "2026-10-04", "mes9obs": "Rhino 3", "preparto45fecha": "2026-10-31", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-11-30", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: IA"}], "neo": [], "rec": []}, {"id": 111, "name": "Carnavalera", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2026-01-05", "fechaParto": "2026-12-16", "padrillo": "Milenario", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-06-05", "mes5obs": "Rhino 1", "mes7fecha": "2026-08-05", "mes7obs": "Rhino 2", "mes9fecha": "2026-10-05", "mes9obs": "Rhino 3", "preparto45fecha": "2026-11-01", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-12-01", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: IA"}], "neo": [], "rec": []}, {"id": 112, "name": "Cueca", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2026-01-06", "fechaParto": "2026-12-17", "padrillo": "Cocorito", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-06-06", "mes5obs": "Rhino 1", "mes7fecha": "2026-08-06", "mes7obs": "Rhino 2", "mes9fecha": "2026-10-06", "mes9obs": "Rhino 3", "preparto45fecha": "2026-11-02", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-12-02", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: IA"}], "neo": [], "rec": []}, {"id": 113, "name": "Colores", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2026-01-08", "fechaParto": "2026-12-19", "padrillo": "Crown Bogart", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-06-08", "mes5obs": "Rhino 1", "mes7fecha": "2026-08-08", "mes7obs": "Rhino 2", "mes9fecha": "2026-10-08", "mes9obs": "Rhino 3", "preparto45fecha": "2026-11-04", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-12-04", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: IA"}], "neo": [], "rec": []}, {"id": 114, "name": "Zamba", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2026-01-10", "fechaParto": "2026-12-21", "padrillo": "Conkanno", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-06-10", "mes5obs": "Rhino 1", "mes7fecha": "2026-08-10", "mes7obs": "Rhino 2", "mes9fecha": "2026-10-10", "mes9obs": "Rhino 3", "preparto45fecha": "2026-11-06", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-12-06", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: IA"}], "neo": [], "rec": []}, {"id": 115, "name": "Charming", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2026-02-13", "fechaParto": "2027-01-24", "padrillo": "Ollister", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-07-13", "mes5obs": "Rhino 1", "mes7fecha": "2026-09-13", "mes7obs": "Rhino 2", "mes9fecha": "2026-11-13", "mes9obs": "Rhino 3", "preparto45fecha": "2026-12-10", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2027-01-09", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: IA"}], "neo": [], "rec": []}]}, {"id": 3, "name": "Las Hermanas", "mares": [{"id": 116, "name": "Gueta", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2025-12-04", "fechaParto": "2026-11-14", "padrillo": "Cobolensky", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-05-04", "mes5obs": "Rhino 1", "mes7fecha": "2026-07-04", "mes7obs": "Rhino 2", "mes9fecha": "2026-09-04", "mes9obs": "Rhino 3", "preparto45fecha": "2026-09-30", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-10-30", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: IA"}], "neo": [], "rec": []}, {"id": 117, "name": "Nirvana", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2025-12-29", "fechaParto": "2026-12-09", "padrillo": "Contharghosten", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-05-29", "mes5obs": "Rhino 1", "mes7fecha": "2026-07-29", "mes7obs": "Rhino 2", "mes9fecha": "2026-09-29", "mes9obs": "Rhino 3", "preparto45fecha": "2026-10-25", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-11-24", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: IA"}], "neo": [], "rec": []}, {"id": 118, "name": "Chess", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2026-01-05", "fechaParto": "2026-12-16", "padrillo": "Milenario", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-06-05", "mes5obs": "Rhino 1", "mes7fecha": "2026-08-05", "mes7obs": "Rhino 2", "mes9fecha": "2026-10-05", "mes9obs": "Rhino 3", "preparto45fecha": "2026-11-01", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-12-01", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: IA"}], "neo": [], "rec": []}, {"id": 119, "name": "Tana Maura", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2026-01-25", "fechaParto": "2027-01-05", "padrillo": "Chacoon Blue", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-06-25", "mes5obs": "Rhino 1", "mes7fecha": "2026-08-25", "mes7obs": "Rhino 2", "mes9fecha": "2026-10-25", "mes9obs": "Rhino 3", "preparto45fecha": "2026-11-21", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-12-21", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: TE"}, {"fechaOvulacion": "2026-02-16", "fechaParto": "2027-01-27", "padrillo": "Chacoon Blue", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-07-16", "mes5obs": "Rhino 1", "mes7fecha": "2026-09-16", "mes7obs": "Rhino 2", "mes9fecha": "2026-11-16", "mes9obs": "Rhino 3", "preparto45fecha": "2026-12-13", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2027-01-12", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: TE"}], "neo": [], "rec": []}, {"id": 120, "name": "Folow me", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2026-01-28", "fechaParto": "2027-01-08", "padrillo": "Sparky", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-06-28", "mes5obs": "Rhino 1", "mes7fecha": "2026-08-28", "mes7obs": "Rhino 2", "mes9fecha": "2026-10-28", "mes9obs": "Rhino 3", "preparto45fecha": "2026-11-24", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-12-24", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: IA"}], "neo": [], "rec": []}, {"id": 121, "name": "Baral Pastime", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2026-01-30", "fechaParto": "2027-01-10", "padrillo": "Sparky", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-06-30", "mes5obs": "Rhino 1", "mes7fecha": "2026-08-30", "mes7obs": "Rhino 2", "mes9fecha": "2026-10-30", "mes9obs": "Rhino 3", "preparto45fecha": "2026-11-26", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-12-26", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: IA"}], "neo": [], "rec": []}]}, {"id": 4, "name": "SIRE", "mares": [{"id": 122, "name": "Rinconera Z", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2025-09-26", "fechaParto": "2026-09-06", "padrillo": "Contharghosten", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-02-26", "mes5obs": "Rhino 1", "mes7fecha": "2026-04-26", "mes7obs": "Rhino 2", "mes9fecha": "2026-06-26", "mes9obs": "Rhino 3", "preparto45fecha": "2026-07-23", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-08-22", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: IA"}], "neo": [], "rec": []}, {"id": 123, "name": "China", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2025-09-27", "fechaParto": "2026-09-07", "padrillo": "Ollister Z", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-02-27", "mes5obs": "Rhino 1", "mes7fecha": "2026-04-27", "mes7obs": "Rhino 2", "mes9fecha": "2026-06-27", "mes9obs": "Rhino 3", "preparto45fecha": "2026-07-24", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-08-23", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: IA"}], "neo": [], "rec": []}, {"id": 124, "name": "Catalina", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2025-10-01", "fechaParto": "2026-09-11", "padrillo": "Chacco Star", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-03-01", "mes5obs": "Rhino 1", "mes7fecha": "2026-05-01", "mes7obs": "Rhino 2", "mes9fecha": "2026-07-01", "mes9obs": "Rhino 3", "preparto45fecha": "2026-07-28", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-08-27", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: TE | Rx: R23 H"}], "neo": [], "rec": []}, {"id": 125, "name": "Rihana", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2025-10-18", "fechaParto": "2026-09-28", "padrillo": "Novak", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-03-18", "mes5obs": "Rhino 1", "mes7fecha": "2026-05-18", "mes7obs": "Rhino 2", "mes9fecha": "2026-07-18", "mes9obs": "Rhino 3", "preparto45fecha": "2026-08-14", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-09-13", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: TE | Rx: 806 H"}], "neo": [], "rec": []}, {"id": 126, "name": "Rumba", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2025-10-18", "fechaParto": "2026-09-28", "padrillo": "Novak", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-03-18", "mes5obs": "Rhino 1", "mes7fecha": "2026-05-18", "mes7obs": "Rhino 2", "mes9fecha": "2026-07-18", "mes9obs": "Rhino 3", "preparto45fecha": "2026-08-14", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-09-13", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: IA"}], "neo": [], "rec": []}, {"id": 127, "name": "Kamikaze Z", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2026-01-08", "fechaParto": "2026-12-19", "padrillo": "Conthalou", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-06-08", "mes5obs": "Rhino 1", "mes7fecha": "2026-08-08", "mes7obs": "Rhino 2", "mes9fecha": "2026-10-08", "mes9obs": "Rhino 3", "preparto45fecha": "2026-11-04", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-12-04", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: IA"}], "neo": [], "rec": []}, {"id": 128, "name": "Titania", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2026-01-26", "fechaParto": "2027-01-06", "padrillo": "Milenario", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-06-26", "mes5obs": "Rhino 1", "mes7fecha": "2026-08-26", "mes7obs": "Rhino 2", "mes9fecha": "2026-10-26", "mes9obs": "Rhino 3", "preparto45fecha": "2026-11-22", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2026-12-22", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: IA"}], "neo": [], "rec": []}, {"id": 129, "name": "Qualita", "breed": "", "born": "", "color": "", "rp": "", "chip": "", "isReceptora": false, "photo": null, "gyn": [], "gest": [{"fechaOvulacion": "2026-02-20", "fechaParto": "2027-01-31", "padrillo": "Conthalou", "donanteNombre": "", "sexoPotrero": "", "eco1": "", "eco2": "", "eco3": "", "mes5fecha": "2026-07-20", "mes5obs": "Rhino 1", "mes7fecha": "2026-09-20", "mes7obs": "Rhino 2", "mes9fecha": "2026-11-20", "mes9obs": "Rhino 3", "preparto45fecha": "2026-12-17", "preparto45obs": "Rota Coli / Triple", "preparto15fecha": "2027-01-16", "preparto15obs": "Rota Coli / Desparasitada", "perineum": false, "mamas": false, "calostre": false, "yeguaRiesgo": false, "seguimientoDiario": [], "observaciones": "Técnica: IA"}], "neo": [], "rec": []}]}, {"id": 5, "name": "Haras Felicitas", "mares": []}, {"id": 6, "name": "Haras Elevage", "mares": []}];
+
+const emptyGyn = () => ({
+  fecha: "", padrillo: "", tecnica: "IA", donanteNombre: "", donanteCentro: "",
+  protocolo: "", dosis: "", laboratorio: "",
+  fechaServicio: "", fechaDG1: "", resultadoDG1: "",
+  fechaDG2: "", resultadoDG2: "",
+  ecoRows: [{ fecha: "", ovIzq: "", ovDer: "", utero: "", cervix: "", obs: "" }],
+  induccionOvulacion: false, productoInduccion: "", fechaInduccion: "", horarioInduccion: "",
+  fechaOvulacion: "", eco1: "", resultado1: "", eco2: "", resultado2: "", eco3: "", resultado3: "",
+  transferencia: false, receptora: "", fechaTE: "",
+  observaciones: "",
+});
+
+const emptyGest = () => ({
+  fechaOvulacion: "", fechaParto: "",
+  padrillo: "", donanteNombre: "", sexoPotrero: "",
+  eco1: "", eco2: "", eco3: "",
+  mes5fecha: "", mes5obs: "",
+  mes7fecha: "", mes7obs: "",
+  mes9fecha: "", mes9obs: "",
+  preparto45fecha: "", preparto45obs: "",
+  preparto15fecha: "", preparto15obs: "",
+  perineum: false, mamas: false, calostre: false,
+  yeguaRiesgo: false,
+  perdioPreniez: false,
+  fechaPerdida: "",
+  motivoPerdida: "",
+  seguimientoDiario: [],
+  observaciones: "",
+});
+
+const emptyNeo = () => ({
+  fechaNacimiento: "", horaPartoInicio: "", horaPartoFin: "",
+  sexo: "", pesoNacimiento: "", apgar: "",
+  bipedestacion: "", calostro: "", expulsionMecanio: "",
+  brixCalostro: "",
+  mucosas: "", tllc: "", fc: "", fr: "", t: "",
+  reflejo: "", succion: "", postura: "",
+  igG: "", igGFecha: "",
+  aplomos: [{ miembro: "", tipo: "", descripcion: "" }],
+  estudios: [{ tipo: "", fecha: "", resultado: "", archivo: "" }],
+  tratamientos: "",
+  observaciones: "",
+});
+
+
+const emptyRec = () => ({
+  fechaTE: "",
+  estadoReproductivo: "",
+  cicloNum: "",
+  donanteNombre: "",
+  donanteCentro: "",
+  donanteRaza: "",
+  donantePadrillo: "",
+  protocoloSincro: "",
+  diaTransferencia: "",
+  calidadEmbrion: "",
+  fechaDG1: "", resultadoDG1: "",
+  fechaDG2: "", resultadoDG2: "",
+  fechaParto: "",
+  foliculo: "", utero: "", progesterona: "",
+  resultado: "",
+  observaciones: "",
+});
+
+
+const emptyDiarioVital = () => ({
+  fecha: "", hora: "",
+  fc: "", fr: "", temp: "", mucosas: "", tllc: "",
+  obs: "",
+});
+
+const emptyDiarioTto = () => ({
+  fecha: "",
+  farmaco: "", dosis: "", via: "", frecuencia: "",
+  obs: "",
+});
+
+const emptyEstudioInt = () => ({
+  tipo: "", fecha: "", resultado: "",
+});
+
+const emptyInternacion = () => ({
+  fechaIngreso: "", fechaAlta: "",
+  motivoIngreso: "",
+  evolucion: "",
+  estudios: [],
+  vitalRows: [],
+  ttoRows: [],
+});
+
+
+const MALAMBO_PACIENTE = {
+  id: 9999,
+  nombre: "Malambo",
+  especie: "Equino",
+  sexo: "Macho",
+  pelaje: "Zaino",
+  raza: "Silla",
+  madre: "",
+  padre: "",
+  propietario: "G. Solá",
+  haras: "Los Cardales",
+  internaciones: [
+    {
+      fechaIngreso: "2025-10-16",
+      fechaAlta: "",
+      motivoIngreso: "Potrillo macho. Fecha nacimiento: 9/10/25. Peso ingreso: 54 kg. Motivo: Septicemia neonatal. Claudicación MPI. Diagnóstico: artritis séptica de babilla izquierda + septicemia neonatal.",
+      vitalRows: [],
+      ttoRows: [
+        { fecha: "2025-10-16", farmaco: "Plasma hiperinmune", dosis: "", via: "IV", frecuencia: "Dosis única", obs: "Tratamiento inicial septicemia neonatal" },
+        { fecha: "2025-10-16", farmaco: "Ceftiofur", dosis: "", via: "IM", frecuencia: "SID", obs: "Antibiótico inicial" },
+        { fecha: "2025-10-16", farmaco: "Amikacina", dosis: "", via: "IV", frecuencia: "SID", obs: "Antibiótico inicial + infusión intraarticular" },
+        { fecha: "2025-11-01", farmaco: "Florfenicol", dosis: "", via: "IM", frecuencia: "BID", obs: "Segunda línea antibiótica" },
+        { fecha: "2025-11-15", farmaco: "Rifampicina", dosis: "", via: "PO", frecuencia: "BID", obs: "Tratamiento actual" },
+        { fecha: "2025-11-15", farmaco: "Doxiciclina", dosis: "", via: "PO", frecuencia: "BID", obs: "Tratamiento actual" },
+        { fecha: "2025-11-01", farmaco: "Lavaje articular + infusión amikacina", dosis: "", via: "Intraarticular", frecuencia: "Repetido", obs: "Ambos tarsos" },
+        { fecha: "2025-11-01", farmaco: "Lavaje articular + infusión amikacina", dosis: "", via: "Intraarticular", frecuencia: "Repetido", obs: "Babilla izquierda" },
+      ],
+      estudios: [
+        { tipo: "Líquido sinovial", fecha: "2025-11-06", resultado: "Proteínas Totales: 3,81 g/dl (VR <2). LDH: 818 U/L (VR <350). Leucocitos: 126.600/mm³ — Neutrófilos: 92%. Compatible con artritis séptica. Cultivo: no solicitado." },
+        { tipo: "Ecografía articular", fecha: "2025-11-12", resultado: "MPI: marcado aumento líquido sinovial fémoro-tibial medial, lateral y fémoro-patelares. Engrosamiento membrana sinovial. Guía ecográfica para extracción líquido sinovial. (Dra. Valeria Arpón MP 9108)" },
+        { tipo: "Ecografía articular", fecha: "2025-11-22", resultado: "MPI: severo aumento líquido sinovial fémoro-tibial medial y lateral, fémoro-patelares. Compatible artritis séptica babilla. MPD: sutil aumento líquido tarso-crural (sinovitis leve). (Dra. Valeria Arpón MP 9108)" },
+        { tipo: "Líquido sinovial", fecha: "2025-11-25", resultado: "Proteínas: 3,52 g/dl. LDH: 508 U/L. Leucocitos: 34.100/mm³ — Neutrófilos: 91%. Descenso significativo vs muestra anterior. Evolución favorable." },
+        { tipo: "Hemograma", fecha: "2025-10-16", resultado: "Perfil sanguíneo al ingreso — ver archivo laboratorio" },
+        { tipo: "Radiografía", fecha: "2025-11-01", resultado: "Estudios complementarios articulares — ver archivo" },
+      ],
+      evolucion: "Potrillo nacido 9/10/25. Ingresa 16/10/25 con 54 kg por septicemia neonatal y artritis séptica de babilla izquierda. Tratamiento inicial: plasma hiperinmune + ceftiofur + amikacina. Segunda línea: florfenicol. Tratamiento actual: rifampicina + doxiciclina. Procedimientos: lavajes articulares con infusión de amikacina en ambos tarsos y babilla izquierda. Evolución muy favorable: peso actual 100 kg. Leucocitos líquido sinovial descendieron de 126.600 a 34.100/mm³. Seguimiento en curso."
+    }
+  ]
+};
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+function formatDate(iso) {
+  if (!iso) return "—";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+function addDays(iso, n) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+// ─── GOOGLE CALENDAR ─────────────────────────────────────────────────────────
+async function createCalendarEvent(title, date, description, colorId = "2") {
+  if (!window._gcalToken) return false;
+  try {
+    const body = {
+      summary: title,
+      description,
+      start: { date },
+      end: { date },
+      colorId,
+      reminders: { useDefault: false, overrides: [{ method: "popup", minutes: 480 }] },
+    };
+    const r = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${window._gcalToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return r.ok;
+  } catch { return false; }
+}
+
+async function sendGestacionToCalendar(mare, harasName, gest) {
+  const events = [];
+  const base = gest.fechaOvulacion;
+  if (!base) return 0;
+
+  // Controles preñez
+  const controls = [
+    [30, "Control preñez 30 días"],
+    [45, "Control preñez 45 días"],
+    [60, "Control preñez 60 días"],
+    [90, "Control preñez 90 días"],
+    [120, "Control preñez 120 días"],
+    [150, "Control preñez 150 días"],
+    [180, "Control preñez 180 días"],
+    [210, "Control preñez 210 días"],
+    [240, "Control preñez 240 días"],
+  ];
+  for (const [days, label] of controls) {
+    events.push({ title: `🐴 ${label} — ${mare.name} (${harasName})`, date: addDays(base, days), desc: `Yegua: ${mare.name} | Haras: ${harasName}`, color: "2" });
+  }
+
+  // Vacunas
+  if (gest.vacunaRhino3) events.push({ title: `💉 Rhinoneumonitis 3 — ${mare.name} (${harasName})`, date: gest.vacunaRhino3, desc: `Yegua: ${mare.name}`, color: "5" });
+  if (gest.vacunaRota) events.push({ title: `💉 Rota/Triple — ${mare.name} (${harasName})`, date: gest.vacunaRota, desc: `Yegua: ${mare.name}`, color: "5" });
+  if (gest.vacunaTriple) events.push({ title: `💉 Triple — ${mare.name} (${harasName})`, date: gest.vacunaTriple, desc: `Yegua: ${mare.name}`, color: "5" });
+
+  // 20 días preparto
+  if (gest.fechaParto) {
+    const pre = addDays(gest.fechaParto, -20);
+    events.push({ title: `⚠️ PREPARTO 20 días — ${mare.name} (${harasName})`, date: pre, desc: `Parto estimado: ${formatDate(gest.fechaParto)} | Yegua: ${mare.name}`, color: "6" });
+  }
+
+  let ok = 0;
+  for (const ev of events) {
+    const success = await createCalendarEvent(ev.title, ev.date, ev.desc, ev.color);
+    if (success) ok++;
+  }
+  return ok;
+}
+
+// ─── ECO TABLE ───────────────────────────────────────────────────────────────
+function EcoTable({ rows, onChange }) {
+  const update = (i, field, val) => {
+    const next = rows.map((r, idx) => idx === i ? { ...r, [field]: val } : r);
+    onChange(next);
+  };
+  const uteroOpts = ["","0","1","2","3"];
+  const cervixOpts = ["","Cerrado","Entreabierto","Abierto","Edematoso"];
+  return (
+    <div style={{overflowX:"auto"}}>
+      <table className="eco-table">
+        <thead>
+          <tr>
+            <th style={{minWidth:110}}>Fecha</th>
+            <th style={{minWidth:130}}>Ovario Izq.</th>
+            <th style={{minWidth:130}}>Ovario Der.</th>
+            <th style={{minWidth:90}}>Útero</th>
+            <th style={{minWidth:120}}>Cérvix</th>
+            <th style={{minWidth:160}}>Observaciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i}>
+              <td><input type="date" value={r.fecha} onChange={e => update(i, "fecha", e.target.value)} /></td>
+              <td><input placeholder="mm / estructura" value={r.ovIzq} onChange={e => update(i, "ovIzq", e.target.value)} /></td>
+              <td><input placeholder="mm / estructura" value={r.ovDer} onChange={e => update(i, "ovDer", e.target.value)} /></td>
+              <td>
+                <select style={{border:"none",background:"transparent",padding:"7px 6px",width:"100%",fontFamily:"DM Sans, sans-serif",fontSize:12}}
+                  value={r.utero} onChange={e => update(i, "utero", e.target.value)}>
+                  {uteroOpts.map(o => <option key={o} value={o}>{o || "—"}</option>)}
+                </select>
+              </td>
+              <td>
+                <select style={{border:"none",background:"transparent",padding:"7px 6px",width:"100%",fontFamily:"DM Sans, sans-serif",fontSize:12}}
+                  value={r.cervix} onChange={e => update(i, "cervix", e.target.value)}>
+                  {cervixOpts.map(o => <option key={o} value={o}>{o || "—"}</option>)}
+                </select>
+              </td>
+              <td><input value={r.obs} onChange={e => update(i, "obs", e.target.value)} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <button className="btn-table-add" onClick={() => onChange([...rows, { fecha: "", ovIzq: "", ovDer: "", utero: "", cervix: "", obs: "" }])}>+ Agregar fila</button>
+    </div>
+  );
+}
+
+// ─── FICHA GINECOLÓGICA ───────────────────────────────────────────────────────
+function FichaGin({ data, onChange, isReceptora }) {
+  const set = (k, v) => onChange({ ...data, [k]: v });
+  return (
+    <div>
+      <div className="ficha-section-title">🔬 Técnica reproductiva</div>
+      <div className="form-grid">
+        <div className="form-group"><label>Fecha</label><input type="date" value={data.fecha} onChange={e => set("fecha", e.target.value)} /></div>
+        {!isReceptora && (
+          <div className="form-group"><label>Técnica</label>
+            <select value={data.tecnica} onChange={e => set("tecnica", e.target.value)}>
+              <option value="IA">Inseminación Artificial (IA)</option>
+              <option value="ICSI">ICSI</option>
+              <option value="TE">Transferencia Embrionaria</option>
+              <option value="OPU">OPU</option>
+            </select>
+          </div>
+        )}
+        {isReceptora ? (
+          <>
+            <div className="form-group">
+              <label>Yegua donante</label>
+              <input value={data.donanteNombre || ""} onChange={e => set("donanteNombre", e.target.value)} placeholder="Nombre de la donante" />
+            </div>
+            <div className="form-group">
+              <label>Padrillo</label>
+              <input value={data.padrillo} onChange={e => set("padrillo", e.target.value)} placeholder="Nombre del padrillo" />
+            </div>
+            <div className="form-group">
+              <label>Centro / Haras donante</label>
+              <input value={data.donanteCentro || ""} onChange={e => set("donanteCentro", e.target.value)} placeholder="Haras de origen" />
+            </div>
+          </>
+        ) : (
+          <div className="form-group"><label>Padrillo / Donante</label><input value={data.padrillo} onChange={e => set("padrillo", e.target.value)} /></div>
+        )}
+        {!isReceptora && <>
+          <div className="form-group"><label>Protocolo</label><input value={data.protocolo} onChange={e => set("protocolo", e.target.value)} /></div>
+          <div className="form-group"><label>Dosis / Concentración</label><input value={data.dosis} onChange={e => set("dosis", e.target.value)} /></div>
+          <div className="form-group"><label>Laboratorio</label><input value={data.laboratorio} onChange={e => set("laboratorio", e.target.value)} /></div>
+        </>}
+      </div>
+
+      <div className="ficha-section-title">📋 Seguimiento ecográfico</div>
+      <EcoTable rows={data.ecoRows} onChange={v => set("ecoRows", v)} />
+
+      <div className="ficha-section-title">💉 Inducción de ovulación</div>
+      <div className="form-grid">
+        <div className="form-group">
+          <div className="checkbox-row">
+            <input type="checkbox" id="ind" checked={data.induccionOvulacion} onChange={e => set("induccionOvulacion", e.target.checked)} />
+            <label htmlFor="ind">Se realizó inducción</label>
+          </div>
+        </div>
+        {data.induccionOvulacion && <>
+          <div className="form-group"><label>Producto</label><input value={data.productoInduccion} onChange={e => set("productoInduccion", e.target.value)} /></div>
+          <div className="form-group"><label>Fecha inducción</label><input type="date" value={data.fechaInduccion} onChange={e => set("fechaInduccion", e.target.value)} /></div>
+          <div className="form-group"><label>⏰ Horario inducción</label><input type="time" value={data.horarioInduccion} onChange={e => set("horarioInduccion", e.target.value)} style={{fontWeight:600,color:"var(--rust)"}} /></div>
+        </>}
+        <div className="form-group"><label>Fecha servicio / IA</label><input type="date" value={data.fechaServicio} onChange={e => set("fechaServicio", e.target.value)} /></div>
+      </div>
+
+      <div className="ficha-section-title">🔍 Diagnóstico de gestación</div>
+      <div className="form-group" style={{marginBottom:14}}>
+        <label>📅 Fecha de ovulación confirmada</label>
+        <input type="date" value={data.fechaOvulacion} onChange={e => set("fechaOvulacion", e.target.value)}
+          style={{maxWidth:200, fontWeight:600, borderColor: data.fechaOvulacion ? "var(--sage)" : undefined}} />
+      </div>
+      {[
+        { key:"eco1", label:"Eco 1", dias:14, resKey:"resultado1" },
+        { key:"eco2", label:"Eco 2", dias:30, resKey:"resultado2" },
+        { key:"eco3", label:"Eco 3", dias:60, resKey:"resultado3" },
+      ].map(({ key, label, dias, resKey }) => {
+        const auto = data.fechaOvulacion ? addDays(data.fechaOvulacion, dias) : "";
+        return (
+          <div key={key} style={{display:"grid",gridTemplateColumns:"auto 1fr 1fr",gap:12,alignItems:"center",marginBottom:10,
+            background: auto ? "#fafaf6" : "transparent", border:"1px solid var(--stone)", borderRadius:7, padding:"10px 14px"}}>
+            <div style={{fontSize:12,fontWeight:600,color:"var(--stone-dark)",minWidth:60}}>
+              {label}<br/><span style={{fontSize:10,fontWeight:400}}>({dias} días)</span>
+            </div>
+            <div className="form-group" style={{margin:0}}>
+              <label>Fecha</label>
+              <input type="date" value={data[key] || auto}
+                onChange={e => set(key, e.target.value)}
+                style={{background: auto && !data[key] ? "#f0f5ee" : undefined, fontStyle: auto && !data[key] ? "italic" : undefined}} />
+              {auto && !data[key] && <span style={{fontSize:10,color:"var(--sage)"}}>calculado automáticamente</span>}
+            </div>
+            <div className="form-group" style={{margin:0}}>
+              <label>Resultado</label>
+              <select value={data[resKey] || ""} onChange={e => set(resKey, e.target.value)}>
+                <option value="">—</option>
+                <option value="Positivo ✓">Positivo ✓</option>
+                <option value="Negativo ✗">Negativo ✗</option>
+                <option value="Gemelar">Gemelar</option>
+                <option value="Reabsorción">Reabsorción</option>
+              </select>
+            </div>
+          </div>
+        );
+      })}
+
+      <div className="ficha-section-title">🔁 Transferencia embrionaria</div>
+      <div className="form-grid">
+        <div className="form-group">
+          <div className="checkbox-row">
+            <input type="checkbox" id="te" checked={data.transferencia} onChange={e => set("transferencia", e.target.checked)} />
+            <label htmlFor="te">Se realizó TE</label>
+          </div>
+        </div>
+        {data.transferencia && <>
+          <div className="form-group"><label>Receptora</label><input value={data.receptora} onChange={e => set("receptora", e.target.value)} /></div>
+          <div className="form-group"><label>Fecha TE</label><input type="date" value={data.fechaTE} onChange={e => set("fechaTE", e.target.value)} /></div>
+        </>}
+      </div>
+
+      <div className="ficha-section-title">📝 Observaciones</div>
+      <div className="form-group"><textarea value={data.observaciones} onChange={e => set("observaciones", e.target.value)} rows={3} /></div>
+    </div>
+  );
+}
+
+// ─── FICHA GESTACIÓN ─────────────────────────────────────────────────────────
+function SeguimientoRow({ row, idx, onChange, onDelete }) {
+  const set = (k, v) => onChange({ ...row, [k]: v });
+  return (
+    <tr>
+      <td><input type="date" value={row.fecha} onChange={e => set("fecha", e.target.value)} /></td>
+      <td><input placeholder="lpm" type="number" value={row.fc} onChange={e => set("fc", e.target.value)} /></td>
+      <td><input placeholder="rpm" type="number" value={row.fr} onChange={e => set("fr", e.target.value)} /></td>
+      <td><input placeholder="°C" type="number" step="0.1" value={row.temp} onChange={e => set("temp", e.target.value)} /></td>
+      <td>
+        <select style={{border:"none",background:"transparent",padding:"6px 4px",width:"100%",fontFamily:"DM Sans,sans-serif",fontSize:12}}
+          value={row.mucosas} onChange={e => set("mucosas", e.target.value)}>
+          <option value="">—</option><option>Rosadas</option><option>Pálidas</option><option>Ictéricas</option><option>Cianóticas</option>
+        </select>
+      </td>
+      <td><input placeholder="mov/h" type="number" value={row.movFetal} onChange={e => set("movFetal", e.target.value)} /></td>
+      <td>
+        <select style={{border:"none",background:"transparent",padding:"6px 4px",width:"100%",fontFamily:"DM Sans,sans-serif",fontSize:12}}
+          value={row.lca} onChange={e => set("lca", e.target.value)}>
+          <option value="">—</option><option>Normal</option><option>Reducido</option><option>Aumentado</option><option>Ausente</option>
+        </select>
+      </td>
+      <td><input placeholder="cm" type="number" step="0.1" value={row.ctup} onChange={e => set("ctup", e.target.value)} /></td>
+      <td><input placeholder="cm" type="number" step="0.1" value={row.liquidoMax} onChange={e => set("liquidoMax", e.target.value)} /></td>
+      <td>
+        <select style={{border:"none",background:"transparent",padding:"6px 4px",width:"100%",fontFamily:"DM Sans,sans-serif",fontSize:12}}
+          value={row.mamas} onChange={e => set("mamas", e.target.value)}>
+          <option value="">—</option><option>Normal</option><option>Edema</option><option>Secreción</option><option>Calostre</option>
+        </select>
+      </td>
+      <td><input value={row.medicacion} onChange={e => set("medicacion", e.target.value)} placeholder="fármaco / dosis" /></td>
+      <td><input value={row.obs} onChange={e => set("obs", e.target.value)} /></td>
+      <td><button onClick={onDelete} style={{background:"none",border:"none",color:"#c47",cursor:"pointer",fontSize:14}}>✕</button></td>
+    </tr>
+  );
+}
+
+function FichaGest({ data, onChange, isReceptora }) {
+  const set = (k, v) => onChange({ ...data, [k]: v });
+  const fechaParto = data.fechaOvulacion ? addDays(data.fechaOvulacion, 345) : "";
+
+  const controles = [
+    { key: "eco1",        label: "Eco 1",                    dias: 14,  tag: null },
+    { key: "eco2",        label: "Eco 2",                    dias: 30,  tag: null },
+    { key: "eco3",        label: "Eco 3",                    dias: 60,  tag: null },
+    { key: "mes5fecha",   label: "5° mes — Rhino 1",         dias: 150, tag: "💉 Rhino 1", obsKey: "mes5obs" },
+    { key: "mes7fecha",   label: "7° mes — Rhino 2",         dias: 210, tag: "💉 Rhino 2", obsKey: "mes7obs" },
+    { key: "mes9fecha",   label: "9° mes — Rhino 3",         dias: 270, tag: "💉 Rhino 3", obsKey: "mes9obs" },
+    { key: "preparto45fecha", label: "45 días preparto — Rota Coli / Triple", dias: -45, tag: "💉 Rota Coli + Triple", obsKey: "preparto45obs", fromParto: true },
+    { key: "preparto15fecha", label: "15 días preparto — Rota Coli / Desparasitada", dias: -15, tag: "💉 Rota Coli + Desparasit.", obsKey: "preparto15obs", fromParto: true },
+  ];
+
+  const addSeguimiento = () => {
+    const row = { fecha: "", fc: "", fr: "", temp: "", mucosas: "", movFetal: "", lca: "", ctup: "", liquidoMax: "", mamas: "", medicacion: "", obs: "" };
+    set("seguimientoDiario", [...(data.seguimientoDiario || []), row]);
+  };
+  const updateSeguimiento = (i, row) => {
+    const arr = [...(data.seguimientoDiario || [])];
+    arr[i] = row;
+    set("seguimientoDiario", arr);
+  };
+  const deleteSeguimiento = (i) => {
+    const arr = (data.seguimientoDiario || []).filter((_, idx) => idx !== i);
+    set("seguimientoDiario", arr);
+  };
+
+  return (
+    <div>
+      {/* PÉRDIDA DE PREÑEZ */}
+      <div style={{marginBottom:12, background: data.perdioPreniez ? "#fff0f0" : "transparent",
+        border: data.perdioPreniez ? "2px solid #e05" : "none",
+        borderRadius:8, padding: data.perdioPreniez ? "14px 16px" : 0}}>
+        <div className="checkbox-row">
+          <input type="checkbox" id="perdida" checked={data.perdioPreniez || false}
+            onChange={e => set("perdioPreniez", e.target.checked)} />
+          <label htmlFor="perdida" style={{fontSize:14, fontWeight:600,
+            color: data.perdioPreniez ? "#c00" : "var(--stone-dark)"}}>
+            ❌ {data.perdioPreniez ? "PREÑEZ PERDIDA" : "Marcar pérdida de preñez"}
+          </label>
+        </div>
+        {data.perdioPreniez && (
+          <div style={{marginTop:12, opacity:1}}>
+            <div className="form-grid" style={{marginBottom:0}}>
+              <div className="form-group" style={{margin:0}}>
+                <label>Fecha de pérdida</label>
+                <input type="date" value={data.fechaPerdida || ""} onChange={e => set("fechaPerdida", e.target.value)} />
+              </div>
+              <div className="form-group" style={{margin:0}}>
+                <label>Motivo</label>
+                <select value={data.motivoPerdida || ""} onChange={e => set("motivoPerdida", e.target.value)}>
+                  <option value="">—</option>
+                  <option>Reabsorción embrionaria</option>
+                  <option>Aborto</option>
+                  <option>Muerte fetal</option>
+                  <option>Gemelar reducido</option>
+                  <option>Causa desconocida</option>
+                  <option>Otro</option>
+                </select>
+              </div>
+            </div>
+            <div style={{marginTop:10, padding:"8px 12px", background:"#fff", borderRadius:6,
+              fontSize:12, color:"#c00", fontStyle:"italic"}}>
+              Esta ficha quedó anulada. Los datos quedan registrados como referencia histórica.
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ALERTA RIESGO */}
+      {!data.perdioPreniez && <div style={{marginBottom:20}}>
+        <div className="checkbox-row">
+          <input type="checkbox" id="riesgo" checked={data.yeguaRiesgo || false} onChange={e => set("yeguaRiesgo", e.target.checked)} />
+          <label htmlFor="riesgo" style={{fontSize:14, fontWeight:600, color: data.yeguaRiesgo ? "#c43" : "var(--ink)"}}>
+            {data.yeguaRiesgo ? "⚠️ YEGUA DE RIESGO" : "⚠️ Marcar como yegua de riesgo"}
+          </label>
+        </div>
+      </div>}
+
+      <div style={{opacity: data.perdioPreniez ? 0.4 : 1, pointerEvents: data.perdioPreniez ? "none" : "auto"}}>
+      <div className="ficha-section-title">🤰 Datos de gestación</div>
+      <div className="form-grid">
+        <div className="form-group">
+          <label>Fecha de ovulación</label>
+          <input type="date" value={data.fechaOvulacion || ""} onChange={e => set("fechaOvulacion", e.target.value)}
+            style={{fontWeight:600, borderColor: data.fechaOvulacion ? "var(--sage)" : undefined}} />
+        </div>
+        <div className="form-group">
+          <label>Parto estimado (345 días)</label>
+          <input type="date" value={fechaParto} readOnly
+            style={{background:"#f0f5ee", color:"var(--sage)", fontWeight:600}} />
+          {fechaParto && <span style={{fontSize:10,color:"var(--sage)"}}>calculado automáticamente</span>}
+        </div>
+        <div className="form-group">
+          <label>Padrillo</label>
+          <input value={data.padrillo || ""} onChange={e => set("padrillo", e.target.value)} />
+        </div>
+        {isReceptora && (
+          <div className="form-group">
+            <label>Donante</label>
+            <input value={data.donanteNombre || ""} onChange={e => set("donanteNombre", e.target.value)}
+              placeholder="Nombre de la yegua donante" style={{borderColor:"#c8bfe0", background:"#f8f5ff"}} />
+          </div>
+        )}
+        <div className="form-group">
+          <label>Sexo del potrillo (si se conoce)</label>
+          <select value={data.sexoPotrero || ""} onChange={e => set("sexoPotrero", e.target.value)}>
+            <option value="">— Sin determinar</option>
+            <option value="Macho">♂ Macho</option>
+            <option value="Hembra">♀ Hembra</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="ficha-section-title">📅 Controles de preñez y vacunaciones</div>
+      {controles.map(({ key, label, dias, tag, obsKey, fromParto }) => {
+        const base = fromParto ? fechaParto : (data.fechaOvulacion || "");
+        const auto = base ? addDays(base, dias) : "";
+        const stored = data[key] || "";
+        return (
+          <div key={key} style={{
+            display:"grid", gridTemplateColumns: obsKey ? "180px 1fr 1fr" : "180px 1fr",
+            gap:10, alignItems:"start", marginBottom:8,
+            background: auto ? "#fafaf6" : "white",
+            border:"1px solid var(--stone)", borderRadius:7, padding:"10px 14px"
+          }}>
+            <div>
+              <div style={{fontSize:12,fontWeight:600,color:"var(--stone-dark)"}}>{label}</div>
+              {tag && <div style={{fontSize:10,marginTop:3,color:"var(--rust)"}}>{tag}</div>}
+              {auto && <div style={{fontSize:10,color:"var(--sage)",marginTop:2}}>{formatDate(auto)}</div>}
+            </div>
+            <div className="form-group" style={{margin:0}}>
+              <label>Fecha realizada</label>
+              <input type="date" value={stored || auto}
+                onChange={e => set(key, e.target.value)}
+                style={{background: auto && !stored ? "#f0f5ee" : undefined, fontStyle: auto && !stored ? "italic" : undefined}} />
+            </div>
+            {obsKey && (
+              <div className="form-group" style={{margin:0}}>
+                <label>Observaciones</label>
+                <input value={data[obsKey] || ""} onChange={e => set(obsKey, e.target.value)} placeholder="resultado, lote, etc." />
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      <div className="ficha-section-title">⚠️ Preparto — 20 días</div>
+      <div className="form-grid">
+        <div className="form-group">
+          <label>Alerta preparto (20 días antes)</label>
+          <input type="date" value={fechaParto ? addDays(fechaParto, -20) : ""} readOnly
+            style={{background:"#fde8e0", color:"var(--rust)", fontWeight:600}} />
+        </div>
+      </div>
+
+      <div className="ficha-section-title">🔎 Examen periparto</div>
+      <div className="form-grid">
+        <div className="form-group">
+          <div className="checkbox-row"><input type="checkbox" id="per" checked={data.perineum || false} onChange={e => set("perineum", e.target.checked)} /><label htmlFor="per">Perineum evaluado</label></div>
+        </div>
+        <div className="form-group">
+          <div className="checkbox-row"><input type="checkbox" id="mam" checked={data.mamas || false} onChange={e => set("mamas", e.target.checked)} /><label htmlFor="mam">Mamas evaluadas</label></div>
+        </div>
+        <div className="form-group">
+          <div className="checkbox-row"><input type="checkbox" id="cal" checked={data.calostre || false} onChange={e => set("calostre", e.target.checked)} /><label htmlFor="cal">Calostro evaluado</label></div>
+        </div>
+      </div>
+
+      <div className="ficha-section-title">📝 Observaciones</div>
+      <div className="form-group"><textarea value={data.observaciones || ""} onChange={e => set("observaciones", e.target.value)} rows={3} /></div>
+
+      </div>
+
+      {/* SEGUIMIENTO DIARIO RIESGO */}
+      {data.yeguaRiesgo && (
+        <div style={{marginTop:28, border:"2px solid #e8a0a0", borderRadius:10, padding:20, background:"#fffafa"}}>
+          <div style={{fontFamily:"'Cormorant Garamond',serif", fontSize:18, fontWeight:600, color:"#c43", marginBottom:16, display:"flex", alignItems:"center", gap:10}}>
+            ⚠️ Planilla de seguimiento diario — Yegua de riesgo
+          </div>
+          <div style={{overflowX:"auto"}}>
+            <table className="eco-table" style={{fontSize:11}}>
+              <thead>
+                <tr>
+                  <th style={{minWidth:100}}>Fecha</th>
+                  <th style={{minWidth:60}}>FC</th>
+                  <th style={{minWidth:60}}>FR</th>
+                  <th style={{minWidth:65}}>T° (°C)</th>
+                  <th style={{minWidth:90}}>Mucosas</th>
+                  <th style={{minWidth:75}}>Mov. fetal</th>
+                  <th style={{minWidth:90}}>LCA</th>
+                  <th style={{minWidth:75}}>CTUP (cm)</th>
+                  <th style={{minWidth:90}}>Líq. máx (cm)</th>
+                  <th style={{minWidth:90}}>Mamas</th>
+                  <th style={{minWidth:160}}>Medicación / tto</th>
+                  <th style={{minWidth:140}}>Observaciones</th>
+                  <th style={{minWidth:30}}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {(data.seguimientoDiario || []).map((row, i) => (
+                  <SeguimientoRow key={i} row={row} idx={i}
+                    onChange={r => updateSeguimiento(i, r)}
+                    onDelete={() => deleteSeguimiento(i)} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <button className="btn-table-add" style={{marginTop:10}} onClick={addSeguimiento}>+ Agregar día</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── FICHA NEONATAL ───────────────────────────────────────────────────────────
+function FichaNeo({ data, onChange }) {
+  const set = (k, v) => onChange({ ...data, [k]: v });
+
+  const updateAplomo = (i, field, val) => {
+    const arr = [...(data.aplomos || [])];
+    arr[i] = { ...arr[i], [field]: val };
+    set("aplomos", arr);
+  };
+  const addAplomo = () => set("aplomos", [...(data.aplomos || []), { miembro: "", tipo: "", descripcion: "" }]);
+  const removeAplomo = (i) => set("aplomos", (data.aplomos || []).filter((_, idx) => idx !== i));
+
+  const updateEstudio = (i, field, val) => {
+    const arr = [...(data.estudios || [])];
+    arr[i] = { ...arr[i], [field]: val };
+    set("estudios", arr);
+  };
+  const addEstudio = () => set("estudios", [...(data.estudios || []), { tipo: "", fecha: "", resultado: "", archivo: "" }]);
+  const removeEstudio = (i) => set("estudios", (data.estudios || []).filter((_, idx) => idx !== i));
+
+  const MIEMBROS = ["— Miembro", "Anterior derecho (AD)", "Anterior izquierdo (AI)", "Posterior derecho (PD)", "Posterior izquierdo (PI)", "Bilateral anterior", "Bilateral posterior", "Los cuatro miembros"];
+  const TIPOS_APLOMO = ["— Tipo", "Retracción", "Laxitud", "Desviación lateral (valgo)", "Desviación lateral (varo)", "Desviación rotacional", "Otro"];
+  const ESTUDIOS_TIPOS = ["Hemograma", "Bioquímica sérica", "Ecografía abdominal", "Ecografía torácica", "Ecografía articular", "Radiografía", "Hemocultivo", "Urocultivo", "Otro"];
+
+  return (
+    <div>
+      <div className="ficha-section-title">🐴 Datos del nacimiento</div>
+      <div className="form-grid-3">
+        <div className="form-group"><label>Fecha nacimiento</label><input type="date" value={data.fechaNacimiento || ""} onChange={e => set("fechaNacimiento", e.target.value)} /></div>
+        <div className="form-group"><label>Hora inicio parto</label><input type="time" value={data.horaPartoInicio || ""} onChange={e => set("horaPartoInicio", e.target.value)} /></div>
+        <div className="form-group"><label>Hora expulsión</label><input type="time" value={data.horaPartoFin || ""} onChange={e => set("horaPartoFin", e.target.value)} /></div>
+        <div className="form-group"><label>Sexo</label>
+          <select value={data.sexo || ""} onChange={e => set("sexo", e.target.value)}>
+            <option value="">—</option><option value="Macho">Macho</option><option value="Hembra">Hembra</option>
+          </select>
+        </div>
+        <div className="form-group"><label>Peso nacimiento (kg)</label><input type="number" step="0.1" value={data.pesoNacimiento || ""} onChange={e => set("pesoNacimiento", e.target.value)} /></div>
+        <div className="form-group"><label>APGAR (1–10)</label><input type="number" min="1" max="10" value={data.apgar || ""} onChange={e => set("apgar", e.target.value)} /></div>
+      </div>
+
+      <div className="ficha-section-title">⏱ Hitos neonatales</div>
+      <div className="form-grid-3">
+        <div className="form-group"><label>Bipedestación (min)</label><input type="number" value={data.bipedestacion || ""} onChange={e => set("bipedestacion", e.target.value)} /></div>
+        <div className="form-group"><label>Calostro (min)</label><input type="number" value={data.calostro || ""} onChange={e => set("calostro", e.target.value)} /></div>
+        <div className="form-group"><label>Expulsión meconio (min)</label><input type="number" value={data.expulsionMecanio || ""} onChange={e => set("expulsionMecanio", e.target.value)} /></div>
+        <div className="form-group">
+          <label>Brix calostro (%)</label>
+          <input type="number" step="0.1" value={data.brixCalostro || ""} onChange={e => set("brixCalostro", e.target.value)}
+            style={{borderColor: data.brixCalostro ? (parseFloat(data.brixCalostro) >= 23 ? "var(--sage)" : "var(--rust)") : undefined,
+                    fontWeight: data.brixCalostro ? 600 : undefined}} />
+          {data.brixCalostro && <span style={{fontSize:10, color: parseFloat(data.brixCalostro) >= 23 ? "var(--sage)" : "var(--rust)", fontWeight:600}}>
+            {parseFloat(data.brixCalostro) >= 23 ? "✓ Calidad adecuada (≥23%)" : "⚠ Calidad insuficiente (<23%)"}
+          </span>}
+        </div>
+      </div>
+
+      <div className="ficha-section-title">🩺 Examen físico</div>
+      <div className="form-grid-3">
+        <div className="form-group"><label>Mucosas</label>
+          <select value={data.mucosas || ""} onChange={e => set("mucosas", e.target.value)}>
+            <option value="">—</option><option>Rosadas húmedas</option><option>Pálidas</option><option>Ictéricas</option><option>Cianóticas</option>
+          </select>
+        </div>
+        <div className="form-group"><label>TLLC (seg)</label><input type="number" step="0.5" value={data.tllc || ""} onChange={e => set("tllc", e.target.value)} /></div>
+        <div className="form-group"><label>FC (lpm)</label><input type="number" value={data.fc || ""} onChange={e => set("fc", e.target.value)} /></div>
+        <div className="form-group"><label>FR (rpm)</label><input type="number" value={data.fr || ""} onChange={e => set("fr", e.target.value)} /></div>
+        <div className="form-group"><label>Temperatura (°C)</label><input type="number" step="0.1" value={data.t || ""} onChange={e => set("t", e.target.value)} /></div>
+        <div className="form-group"><label>Reflejo de succión</label>
+          <select value={data.succion || ""} onChange={e => set("succion", e.target.value)}>
+            <option value="">—</option><option>Presente</option><option>Débil</option><option>Ausente</option>
+          </select>
+        </div>
+        <div className="form-group"><label>Postura</label>
+          <select value={data.postura || ""} onChange={e => set("postura", e.target.value)}>
+            <option value="">—</option><option>Normal</option><option>Decúbito</option><option>Atáxica</option>
+          </select>
+        </div>
+        <div className="form-group"><label>Reflejo corneal/pupilar</label>
+          <select value={data.reflejo || ""} onChange={e => set("reflejo", e.target.value)}>
+            <option value="">—</option><option>Normal</option><option>Disminuido</option><option>Ausente</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="ficha-section-title">🦵 Aplomos</div>
+      {(data.aplomos || []).length === 0 && (
+        <div style={{fontSize:13,color:"var(--stone-dark)",marginBottom:10}}>Sin alteraciones de aplomos registradas.</div>
+      )}
+      {(data.aplomos || []).map((a, i) => (
+        <div key={i} style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr auto", gap:10, alignItems:"end",
+          background:"#fafaf6", border:"1px solid var(--stone)", borderRadius:7, padding:"12px 14px", marginBottom:8}}>
+          <div className="form-group" style={{margin:0}}>
+            <label>Miembro</label>
+            <select value={a.miembro} onChange={e => updateAplomo(i, "miembro", e.target.value)}>
+              {MIEMBROS.map(m => <option key={m} value={m === "— Miembro" ? "" : m}>{m}</option>)}
+            </select>
+          </div>
+          <div className="form-group" style={{margin:0}}>
+            <label>Tipo de alteración</label>
+            <select value={a.tipo} onChange={e => updateAplomo(i, "tipo", e.target.value)}>
+              {TIPOS_APLOMO.map(t => <option key={t} value={t === "— Tipo" ? "" : t}>{t}</option>)}
+            </select>
+          </div>
+          <div className="form-group" style={{margin:0}}>
+            <label>Descripción / grado</label>
+            <input value={a.descripcion} onChange={e => updateAplomo(i, "descripcion", e.target.value)} placeholder="Ej: leve, moderado, severo..." />
+          </div>
+          <button onClick={() => removeAplomo(i)} style={{background:"none",border:"none",color:"var(--rust)",cursor:"pointer",fontSize:18,paddingBottom:4}}>✕</button>
+        </div>
+      ))}
+      <button className="btn-table-add" onClick={addAplomo}>+ Agregar aplomo</button>
+
+      <div className="ficha-section-title">🧪 Inmunidad</div>
+      <div className="form-grid">
+        <div className="form-group"><label>IgG (mg/dL)</label><input type="number" value={data.igG || ""} onChange={e => set("igG", e.target.value)} /></div>
+        <div className="form-group"><label>Fecha IgG</label><input type="date" value={data.igGFecha || ""} onChange={e => set("igGFecha", e.target.value)} /></div>
+      </div>
+
+      <div className="ficha-section-title">🔬 Estudios complementarios</div>
+      {(data.estudios || []).map((e, i) => (
+        <div key={i} style={{display:"grid", gridTemplateColumns:"1fr 140px 1fr auto", gap:10, alignItems:"end",
+          background:"#f5f8ff", border:"1px solid #d0d8f0", borderRadius:7, padding:"12px 14px", marginBottom:8}}>
+          <div className="form-group" style={{margin:0}}>
+            <label>Tipo de estudio</label>
+            <select value={e.tipo} onChange={ev => updateEstudio(i, "tipo", ev.target.value)}>
+              <option value="">—</option>
+              {ESTUDIOS_TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div className="form-group" style={{margin:0}}>
+            <label>Fecha</label>
+            <input type="date" value={e.fecha} onChange={ev => updateEstudio(i, "fecha", ev.target.value)} />
+          </div>
+          <div className="form-group" style={{margin:0}}>
+            <label>Resultado / hallazgos</label>
+            <input value={e.resultado} onChange={ev => updateEstudio(i, "resultado", ev.target.value)} placeholder="Describir resultado..." />
+          </div>
+          <button onClick={() => removeEstudio(i)} style={{background:"none",border:"none",color:"var(--rust)",cursor:"pointer",fontSize:18,paddingBottom:4}}>✕</button>
+        </div>
+      ))}
+      <button className="btn-table-add" style={{borderColor:"#d0d8f0",color:"#5a6aaa"}} onClick={addEstudio}>+ Agregar estudio</button>
+
+      <div className="ficha-section-title">💊 Tratamientos neonatales</div>
+      <div className="form-group"><textarea value={data.tratamientos || ""} onChange={e => set("tratamientos", e.target.value)} rows={3} placeholder="Medicación, dosis, vía, frecuencia..." /></div>
+
+      <div className="ficha-section-title">📝 Observaciones</div>
+      <div className="form-group"><textarea value={data.observaciones || ""} onChange={e => set("observaciones", e.target.value)} rows={3} /></div>
+    </div>
+  );
+}
+
+
+// ─── FICHA RECEPTORA ─────────────────────────────────────────────────────────
+function FichaRec({ data, onChange }) {
+  const set = (k, v) => onChange({ ...data, [k]: v });
+  return (
+    <div>
+      <div className="ficha-section-title">🐎 Yegua donante vinculada</div>
+      <div style={{background:"#f8f5ff",border:"1px solid #d4cce8",borderRadius:8,padding:"16px 20px",marginBottom:16}}>
+        <div className="form-grid-3">
+          <div className="form-group">
+            <label>Nombre de la donante</label>
+            <input value={data.donanteNombre} onChange={e => set("donanteNombre", e.target.value)} placeholder="Ej: Princess Special" />
+          </div>
+          <div className="form-group">
+            <label>Centro / Haras de origen</label>
+            <input value={data.donanteCentro} onChange={e => set("donanteCentro", e.target.value)} placeholder="Ej: Windcrest" />
+          </div>
+          <div className="form-group">
+            <label>Raza donante</label>
+            <input value={data.donanteRaza} onChange={e => set("donanteRaza", e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label>Padrillo / Embrión de</label>
+            <input value={data.donantePadrillo} onChange={e => set("donantePadrillo", e.target.value)} />
+          </div>
+        </div>
+      </div>
+
+      <div className="ficha-section-title">🔬 Datos de la transferencia</div>
+      <div className="form-grid">
+        <div className="form-group">
+          <label>Fecha de TE</label>
+          <input type="date" value={data.fechaTE} onChange={e => set("fechaTE", e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label>N° ciclo receptora</label>
+          <input type="number" value={data.cicloNum} onChange={e => set("cicloNum", e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label>Estado reproductivo previo</label>
+          <select value={data.estadoReproductivo} onChange={e => set("estadoReproductivo", e.target.value)}>
+            <option value="">—</option>
+            <option>Cíclica</option>
+            <option>Anestro</option>
+            <option>Prepúber</option>
+          </select>
+        </div>
+        <div className="form-group">
+          <label>Protocolo sincronización</label>
+          <input value={data.protocoloSincro} onChange={e => set("protocoloSincro", e.target.value)} placeholder="Ej: hCG + PGF2α" />
+        </div>
+        <div className="form-group">
+          <label>Día transferencia (respecto ovulación)</label>
+          <input type="number" value={data.diaTransferencia} onChange={e => set("diaTransferencia", e.target.value)} placeholder="Ej: 6" />
+        </div>
+        <div className="form-group">
+          <label>Calidad embrión</label>
+          <select value={data.calidadEmbrion} onChange={e => set("calidadEmbrion", e.target.value)}>
+            <option value="">—</option>
+            <option>Excelente (1)</option>
+            <option>Buena (2)</option>
+            <option>Regular (3)</option>
+            <option>Pobre (4)</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="ficha-section-title">🔎 Examen previo a la TE</div>
+      <div className="form-grid-3">
+        <div className="form-group">
+          <label>Folículo ovulado (mm)</label>
+          <input type="number" value={data.foliculo} onChange={e => set("foliculo", e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label>Tono uterino</label>
+          <select value={data.utero} onChange={e => set("utero", e.target.value)}>
+            <option value="">—</option><option>0</option><option>1</option><option>2</option><option>3</option>
+          </select>
+        </div>
+        <div className="form-group">
+          <label>Progesterona (ng/mL)</label>
+          <input type="number" step="0.1" value={data.progesterona} onChange={e => set("progesterona", e.target.value)} />
+        </div>
+      </div>
+
+      <div className="ficha-section-title">🔍 Diagnóstico de gestación</div>
+      <div className="form-grid">
+        <div className="form-group">
+          <label>Fecha DG1</label>
+          <input type="date" value={data.fechaDG1} onChange={e => set("fechaDG1", e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label>Resultado DG1</label>
+          <select value={data.resultadoDG1} onChange={e => set("resultadoDG1", e.target.value)}>
+            <option value="">—</option><option>Positivo</option><option>Negativo</option><option>Reabsorción</option>
+          </select>
+        </div>
+        <div className="form-group">
+          <label>Fecha DG2</label>
+          <input type="date" value={data.fechaDG2} onChange={e => set("fechaDG2", e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label>Resultado DG2</label>
+          <select value={data.resultadoDG2} onChange={e => set("resultadoDG2", e.target.value)}>
+            <option value="">—</option><option>Positivo</option><option>Negativo</option><option>Reabsorción</option>
+          </select>
+        </div>
+        <div className="form-group">
+          <label>Parto estimado</label>
+          <input type="date" value={data.fechaParto} onChange={e => set("fechaParto", e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label>Resultado final</label>
+          <select value={data.resultado} onChange={e => set("resultado", e.target.value)}>
+            <option value="">—</option><option>Preñada</option><option>Vacía</option><option>Perdida gestación</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="ficha-section-title">📝 Observaciones</div>
+      <div className="form-group">
+        <textarea value={data.observaciones} onChange={e => set("observaciones", e.target.value)} rows={3} />
+      </div>
+    </div>
+  );
+}
+
+
+// ─── FICHA INTERNACIÓN ────────────────────────────────────────────────────────
+function FichaInternacion({ data, onChange }) {
+  const set = (k, v) => onChange({ ...data, [k]: v });
+
+  const addVital = () => set("vitalRows", [...(data.vitalRows || []), emptyDiarioVital()]);
+  const updateVital = (i, f, v) => {
+    const arr = [...(data.vitalRows || [])]; arr[i] = { ...arr[i], [f]: v }; set("vitalRows", arr);
+  };
+  const removeVital = (i) => set("vitalRows", (data.vitalRows || []).filter((_, idx) => idx !== i));
+
+  const addTto = () => set("ttoRows", [...(data.ttoRows || []), emptyDiarioTto()]);
+  const updateTto = (i, f, v) => {
+    const arr = [...(data.ttoRows || [])]; arr[i] = { ...arr[i], [f]: v }; set("ttoRows", arr);
+  };
+  const removeTto = (i) => set("ttoRows", (data.ttoRows || []).filter((_, idx) => idx !== i));
+
+  const addEstudio = () => set("estudios", [...(data.estudios || []), emptyEstudioInt()]);
+  const updateEstudio = (i, f, v) => {
+    const arr = [...(data.estudios || [])]; arr[i] = { ...arr[i], [f]: v }; set("estudios", arr);
+  };
+  const removeEstudio = (i) => set("estudios", (data.estudios || []).filter((_, idx) => idx !== i));
+
+  const ESTUDIOS_TIPOS = ["Hemograma", "Bioquímica sérica", "Líquido sinovial", "Hemocultivo", "Urocultivo",
+    "Ecografía articular", "Ecografía abdominal", "Ecografía torácica", "Radiografía", "Otro"];
+
+  return (
+    <div>
+      <div className="ficha-section-title">📋 Datos de internación</div>
+      <div className="form-grid">
+        <div className="form-group">
+          <label>Fecha de ingreso</label>
+          <input type="date" value={data.fechaIngreso || ""} onChange={e => set("fechaIngreso", e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label>Fecha de alta</label>
+          <input type="date" value={data.fechaAlta || ""} onChange={e => set("fechaAlta", e.target.value)} />
+        </div>
+        <div className="form-group full">
+          <label>Motivo de internación</label>
+          <textarea value={data.motivoIngreso || ""} onChange={e => set("motivoIngreso", e.target.value)}
+            rows={3} placeholder="Diagnóstico presuntivo, signos clínicos al ingreso, antecedentes..." />
+        </div>
+      </div>
+
+      <div className="ficha-section-title">🩺 Chequeo diario — Signos vitales</div>
+      <div style={{overflowX:"auto"}}>
+        <table className="diario-table">
+          <thead>
+            <tr>
+              <th style={{minWidth:100}}>Fecha</th>
+              <th style={{minWidth:70}}>Hora</th>
+              <th style={{minWidth:65}}>FC (lpm)</th>
+              <th style={{minWidth:65}}>FR (rpm)</th>
+              <th style={{minWidth:70}}>T° (°C)</th>
+              <th style={{minWidth:110}}>Mucosas</th>
+              <th style={{minWidth:75}}>TLLC (s)</th>
+              <th style={{minWidth:180}}>Observaciones</th>
+              <th style={{minWidth:30}}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {(data.vitalRows || []).map((r, i) => (
+              <tr key={i}>
+                <td><input type="date" value={r.fecha} onChange={e => updateVital(i, "fecha", e.target.value)} /></td>
+                <td><input type="time" value={r.hora} onChange={e => updateVital(i, "hora", e.target.value)} /></td>
+                <td><input type="number" value={r.fc} onChange={e => updateVital(i, "fc", e.target.value)} /></td>
+                <td><input type="number" value={r.fr} onChange={e => updateVital(i, "fr", e.target.value)} /></td>
+                <td><input type="number" step="0.1" value={r.temp} onChange={e => updateVital(i, "temp", e.target.value)} /></td>
+                <td>
+                  <select value={r.mucosas} onChange={e => updateVital(i, "mucosas", e.target.value)}
+                    style={{border:"none",background:"transparent",padding:"6px 4px",width:"100%",fontFamily:"DM Sans,sans-serif",fontSize:12}}>
+                    <option value="">—</option>
+                    <option>Rosadas húmedas</option><option>Pálidas</option><option>Ictéricas</option><option>Cianóticas</option>
+                  </select>
+                </td>
+                <td><input type="number" step="0.5" value={r.tllc} onChange={e => updateVital(i, "tllc", e.target.value)} /></td>
+                <td><input value={r.obs} onChange={e => updateVital(i, "obs", e.target.value)} /></td>
+                <td><button onClick={() => removeVital(i)} style={{background:"none",border:"none",color:"var(--rust)",cursor:"pointer",fontSize:14}}>✕</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <button className="btn-table-add" onClick={addVital}>+ Agregar día</button>
+
+      <div className="ficha-section-title">💊 Tratamiento diario</div>
+      <div style={{overflowX:"auto"}}>
+        <table className="diario-table">
+          <thead>
+            <tr>
+              <th style={{minWidth:100}}>Fecha</th>
+              <th style={{minWidth:180}}>Fármaco</th>
+              <th style={{minWidth:100}}>Dosis</th>
+              <th style={{minWidth:90}}>Vía</th>
+              <th style={{minWidth:110}}>Frecuencia</th>
+              <th style={{minWidth:180}}>Observaciones</th>
+              <th style={{minWidth:30}}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {(data.ttoRows || []).map((r, i) => (
+              <tr key={i}>
+                <td><input type="date" value={r.fecha} onChange={e => updateTto(i, "fecha", e.target.value)} /></td>
+                <td><input value={r.farmaco} onChange={e => updateTto(i, "farmaco", e.target.value)} placeholder="nombre del fármaco" /></td>
+                <td><input value={r.dosis} onChange={e => updateTto(i, "dosis", e.target.value)} placeholder="mg/kg" /></td>
+                <td>
+                  <select value={r.via} onChange={e => updateTto(i, "via", e.target.value)}
+                    style={{border:"none",background:"transparent",padding:"6px 4px",width:"100%",fontFamily:"DM Sans,sans-serif",fontSize:12}}>
+                    <option value="">—</option>
+                    <option>IV</option><option>IM</option><option>SC</option><option>PO</option>
+                    <option>Intraarticular</option><option>Tópico</option><option>Otra</option>
+                  </select>
+                </td>
+                <td><input value={r.frecuencia} onChange={e => updateTto(i, "frecuencia", e.target.value)} placeholder="c/12h, SID..." /></td>
+                <td><input value={r.obs} onChange={e => updateTto(i, "obs", e.target.value)} /></td>
+                <td><button onClick={() => removeTto(i)} style={{background:"none",border:"none",color:"var(--rust)",cursor:"pointer",fontSize:14}}>✕</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <button className="btn-table-add" onClick={addTto}>+ Agregar tratamiento</button>
+
+      <div className="ficha-section-title">🔬 Estudios complementarios</div>
+      {(data.estudios || []).map((e, i) => (
+        <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 140px 1fr auto",gap:10,alignItems:"end",
+          background:"#f5f8ff",border:"1px solid #d0d8f0",borderRadius:7,padding:"12px 14px",marginBottom:8}}>
+          <div className="form-group" style={{margin:0}}>
+            <label>Tipo de estudio</label>
+            <select value={e.tipo} onChange={ev => updateEstudio(i,"tipo",ev.target.value)}>
+              <option value="">—</option>
+              {ESTUDIOS_TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div className="form-group" style={{margin:0}}>
+            <label>Fecha</label>
+            <input type="date" value={e.fecha} onChange={ev => updateEstudio(i,"fecha",ev.target.value)} />
+          </div>
+          <div className="form-group" style={{margin:0}}>
+            <label>Resultado / hallazgos</label>
+            <input value={e.resultado} onChange={ev => updateEstudio(i,"resultado",ev.target.value)} placeholder="valores, interpretación..." />
+          </div>
+          <button onClick={() => removeEstudio(i)} style={{background:"none",border:"none",color:"var(--rust)",cursor:"pointer",fontSize:18,paddingBottom:4}}>✕</button>
+        </div>
+      ))}
+      <button className="btn-table-add" style={{borderColor:"#d0d8f0",color:"#5a6aaa"}} onClick={addEstudio}>+ Agregar estudio</button>
+
+      <div className="ficha-section-title">📝 Evolución clínica</div>
+      <div className="form-group">
+        <textarea value={data.evolucion || ""} onChange={e => set("evolucion", e.target.value)}
+          rows={4} placeholder="Evolución general, respuesta al tratamiento, cambios terapéuticos, estado al alta..." />
+      </div>
+    </div>
+  );
+}
+
+// ─── MAIN APP ─────────────────────────────────────────────────────────────────
+function App() {
+  const [harasList, setHarasList] = useState(INITIAL_HARAS);
+  const [pacientes, setPacientes] = useState([MALAMBO_PACIENTE]);
+  const [view, setView] = useState("haras");
+  const [dbLoaded] = useState(true);
+  const [saving] = useState(false);
+  const [selectedHaras, setSelectedHaras] = useState(null);
+  const [selectedMare, setSelectedMare] = useState(null);
+  const [activeTab, setActiveTab] = useState("gyn");
+  const [modal, setModal] = useState(null); // null | "addHaras" | "addMare" | "addPaciente"
+  const [selectedPaciente, setSelectedPaciente] = useState(null);
+  const [newPaciente, setNewPaciente] = useState({ nombre: "", especie: "Equino", sexo: "", pelaje: "", raza: "", madre: "", padre: "", propietario: "", haras: "" });
+  const [toast, setToast] = useState(null);
+  const [calConnected, setCalConnected] = useState(false);
+  const [newHarasName, setNewHarasName] = useState("");
+  const [newMare, setNewMare] = useState({ name: "", breed: "", born: "", color: "", rp: "", chip: "", isReceptora: false });
+  const photoInputRef = useRef();
+
+  const showToast = (msg, type = "success") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  // ── Pacientes internacion ──
+  const addPaciente = () => {
+    if (!newPaciente.nombre.trim()) return;
+    const p = { id: Date.now(), ...newPaciente, internaciones: [] };
+    setPacientes(prev => [...prev, p]);
+    setNewPaciente({ nombre: "", especie: "Equino", sexo: "", pelaje: "", raza: "", madre: "", padre: "", propietario: "", haras: "" });
+    setModal(null);
+    showToast("Paciente agregado");
+  };
+  const addInternacion = (pid) => {
+    setPacientes(prev => prev.map(p => p.id === pid
+      ? { ...p, internaciones: [...p.internaciones, emptyInternacion()] }
+      : p
+    ));
+  };
+  const updateInternacion = (pid, idx, data) => {
+    setPacientes(prev => prev.map(p => {
+      if (p.id !== pid) return p;
+      const arr = [...p.internaciones]; arr[idx] = data;
+      return { ...p, internaciones: arr };
+    }));
+  };
+  const currentPaciente = () => pacientes.find(p => p.id === selectedPaciente);
+
+  // ── Google Calendar auth ──
+  const connectCalendar = () => {
+    const CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID";
+    const SCOPES = "https://www.googleapis.com/auth/calendar.events";
+    const params = new URLSearchParams({
+      client_id: CLIENT_ID,
+      redirect_uri: window.location.href.split("?")[0],
+      response_type: "token",
+      scope: SCOPES,
+    });
+    const url = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+    const popup = window.open(url, "gcal", "width=500,height=600");
+    const timer = setInterval(() => {
+      try {
+        const hash = popup?.location?.hash;
+        if (hash && hash.includes("access_token")) {
+          clearInterval(timer);
+          const token = new URLSearchParams(hash.slice(1)).get("access_token");
+          window._gcalToken = token;
+          setCalConnected(true);
+          popup.close();
+          showToast("✅ Google Calendar conectado");
+        }
+      } catch (_) {}
+      if (popup?.closed) clearInterval(timer);
+    }, 500);
+  };
+
+  // ── Haras ──
+  const getHaras = id => harasList.find(h => h.id === id);
+  const updateHaras = (hid, updater) => setHarasList(list => list.map(h => h.id === hid ? updater(h) : h));
+
+  const addHaras = () => {
+    if (!newHarasName.trim()) return;
+    setHarasList(l => [...l, { id: Date.now(), name: newHarasName.trim(), mares: [] }]);
+    setNewHarasName("");
+    setModal(null);
+    showToast("Haras agregado");
+  };
+
+  // ── Mares ──
+  const addMare = () => {
+    if (!newMare.name.trim()) return;
+    const mare = { id: Date.now(), ...newMare, photo: null, isReceptora: newMare.isReceptora || false, gyn: [], gest: [], neo: [], rec: [] };
+    updateHaras(selectedHaras, h => ({ ...h, mares: [...h.mares, mare] }));
+    setNewMare({ name: "", breed: "", born: "", color: "", rp: "", chip: "" });
+    setModal(null);
+    showToast(`${mare.name} agregada`);
+  };
+
+  // ── Photo upload ──
+  const handlePhoto = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      updateHaras(selectedHaras, h => ({
+        ...h,
+        mares: h.mares.map(m => m.id === selectedMare.id ? { ...m, photo: ev.target.result } : m),
+      }));
+      setSelectedMare(prev => ({ ...prev, photo: ev.target.result }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // ── Fichas ──
+  const currentMare = () => {
+    const h = getHaras(selectedHaras);
+    return h?.mares.find(m => m.id === selectedMare?.id);
+  };
+
+  const updateFicha = (type, idx, data) => {
+    updateHaras(selectedHaras, h => ({
+      ...h,
+      mares: h.mares.map(m => {
+        if (m.id !== selectedMare.id) return m;
+        const arr = [...(m[type] || [])];
+        arr[idx] = data;
+        return { ...m, [type]: arr };
+      }),
+    }));
+  };
+
+  const addFicha = (type) => {
+    const blank = type === "gyn" ? emptyGyn() : type === "gest" ? emptyGest() : type === "neo" ? emptyNeo() : emptyRec();
+    updateHaras(selectedHaras, h => ({
+      ...h,
+      mares: h.mares.map(m => m.id === selectedMare.id ? { ...m, [type]: [...(m[type] || []), blank] } : m),
+    }));
+  };
+
+  // ── Calendar push ──
+  const pushToCalendar = async () => {
+    if (!calConnected) { showToast("Conectá Google Calendar primero", "cal"); return; }
+    const mare = currentMare();
+    const harasName = getHaras(selectedHaras)?.name || "";
+    const gestFichas = mare?.gest || [];
+    let total = 0;
+    for (const g of gestFichas) {
+      total += await sendGestacionToCalendar(mare, harasName, g);
+    }
+    showToast(`📅 ${total} eventos creados en Google Calendar`, "cal");
+  };
+
+  // ── RENDER ──
+  const haras = getHaras(selectedHaras);
+  const mare = currentMare();
+
+  return (
+    <>
+      <style>{css}</style>
+      <div className="app">
+        {/* HEADER */}
+        <div className="header">
+          <div className="header-brand">
+                        <div>
+              <div style={fontSize:10,color:"var(--stone)",letterSpacing:"0.12em",textTransform:"uppercase",marginTop:2}>Gestión reproductiva equina</div>
+            </div>
+          </div>
+          <button
+            className={`header-cal-btn ${calConnected ? "connected" : ""}`}
+            onClick={calConnected ? undefined : connectCalendar}
+          >
+            {calConnected ? "✅ Calendar conectado" : "🗓 Conectar Google Calendar"}
+          </button>
+        </div>
+
+        {/* NAV TABS */}
+        <div className="nav-tabs">
+          <button className={`nav-tab ${!["internacion","paciente"].includes(view) ? "active" : ""}`}
+            onClick={() => setView("haras")}>🐴 Reproductivo</button>
+          <button className={`nav-tab ${["internacion","paciente"].includes(view) ? "active" : ""}`}
+            onClick={() => setView("internacion")}>🏥 Internación</button>
+          <button className={`nav-tab ${view === "estadisticas" ? "active" : ""}`}
+            onClick={() => setView("estadisticas")}>📊 Estadísticas</button>
+        </div>
+
+        {/* BREADCRUMB */}
+        <div className="breadcrumb">
+          {!["internacion","paciente","estadisticas"].includes(view) ? <>
+            <span onClick={() => setView("haras")}>Haras</span>
+            {view !== "haras" && <><span className="sep">›</span><span onClick={() => setView("mares")}>{haras?.name}</span></>}
+            {view === "mare" && <><span className="sep">›</span><span className="active">{mare?.name}</span></>}
+          </> : view === "estadisticas" ? <>
+            <span className="active">Estadísticas</span>
+          </> : <>
+            <span onClick={() => setView("internacion")}>Internación</span>
+            {view === "paciente" && <><span className="sep">›</span><span className="active">{currentPaciente()?.nombre}</span></>}
+          </>}
+          {view === "estadisticas" && <span className="active">Estadísticas reproductivas</span>}
+        </div>
+
+        <div className="main">
+
+          {/* ── HARAS VIEW ── */}
+          {view === "haras" && (
+            <>
+              <div className="section-title">Haras</div>
+              <div className="section-sub">Seleccioná un haras para ver sus yeguas</div>
+              <button className="btn-add" onClick={() => setModal("addHaras")}>＋ Agregar haras</button>
+              {harasList.length === 0 ? (
+                <div className="empty"><div className="empty-icon">🏇</div><div className="empty-title">Sin haras cargados</div><div className="empty-sub">Agregá el primer haras para comenzar</div></div>
+              ) : (
+                <div className="grid">
+                  {harasList.map(h => (
+                    <div key={h.id} className="haras-card" onClick={() => { setSelectedHaras(h.id); setView("mares"); }}>
+                      <div className="haras-card-icon">🏡</div>
+                      <div className="haras-card-name">{h.name}</div>
+                      <div className="haras-card-count">{h.mares.length} yegua{h.mares.length !== 1 ? "s" : ""}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── MARES VIEW ── */}
+          {view === "mares" && haras && (
+            <>
+              <div className="section-title">{haras.name}</div>
+              <div className="section-sub">Yeguas registradas en este haras</div>
+              <button className="btn-add" onClick={() => setModal("addMare")}>＋ Agregar yegua</button>
+              {haras.mares.length === 0 ? (
+                <div className="empty"><div className="empty-icon">🐎</div><div className="empty-title">Sin yeguas</div><div className="empty-sub">Agregá la primera yegua para comenzar</div></div>
+              ) : (
+                <div className="grid">
+                  {haras.mares.map(m => (
+                    <div key={m.id} className="mare-card" onClick={() => { setSelectedMare(m); setView("mare"); setActiveTab("gyn"); }}>
+                      <div className="mare-photo">
+                        {m.photo ? <img src={m.photo} alt={m.name} /> : "🐴"}
+                      </div>
+                      <div className="mare-info">
+                        <div className="mare-name">{m.name}</div>
+                        <div className="mare-breed">{m.breed || "Sin raza"} {m.born ? `· ${m.born}` : ""}</div>
+                        <div className="mare-tags">
+                          {m.isReceptora && <span className="tag tag-rec">Receptora</span>}
+                          {(m.gyn?.length > 0) && <span className="tag tag-gyn">Gin ({m.gyn.length})</span>}
+                          {(m.gest?.length > 0) && <span className="tag tag-gest">Gest ({m.gest.length})</span>}
+                          {(m.neo?.length > 0) && <span className="tag tag-neo">Neo ({m.neo.length})</span>}
+                          {(m.rec?.length > 0) && <span className="tag tag-rec">Rec ({m.rec.length})</span>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── MARE VIEW ── */}
+          {view === "mare" && mare && (
+            <>
+              {/* Header yegua */}
+              <div className="mare-detail-header">
+                <div className="mare-detail-photo" onClick={() => photoInputRef.current.click()}>
+                  {mare.photo ? <img src={mare.photo} alt={mare.name} /> : "🐴"}
+                  <div className="photo-overlay"><span>📷</span><span>Cambiar foto</span></div>
+                </div>
+                <input ref={photoInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handlePhoto} />
+                <div className="mare-detail-info">
+                  <div className="mare-detail-name">{mare.name}</div>
+                  <div className="mare-detail-meta">{haras?.name}</div>
+                  <div className="meta-grid">
+                    <div className="meta-item"><label>Raza</label><span>{mare.breed || "—"}</span></div>
+                    <div className="meta-item"><label>Nacimiento</label><span>{mare.born || "—"}</span></div>
+                    <div className="meta-item"><label>Pelaje</label><span>{mare.color || "—"}</span></div>
+                    <div className="meta-item"><label>RP</label><span>{mare.rp || "—"}</span></div>
+                    <div className="meta-item"><label>Chip</label><span>{mare.chip || "—"}</span></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tabs */}
+              <div className="fichas-tabs">
+                <button className={`ficha-tab ${activeTab === "gyn" ? "active-gyn" : ""}`} onClick={() => setActiveTab("gyn")}>
+                  🔬 Ginecológica <span className="history-badge">{mare.gyn?.length || 0}</span>
+                </button>
+                <button className={`ficha-tab ${activeTab === "gest" ? "active-gest" : ""}`} onClick={() => setActiveTab("gest")}>
+                  🤰 Gestación <span className="history-badge">{mare.gest?.length || 0}</span>
+                </button>
+                <button className={`ficha-tab ${activeTab === "neo" ? "active-neo" : ""}`} onClick={() => setActiveTab("neo")}>
+                  🐴 Neonatal <span className="history-badge">{mare.neo?.length || 0}</span>
+                </button>
+                {mare.isReceptora && (
+                  <button className={`ficha-tab ${activeTab === "rec" ? "active-rec" : ""}`} onClick={() => setActiveTab("rec")}>
+                    🔁 Receptora <span className="history-badge">{mare.rec?.length || 0}</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Fichas */}
+              {["gyn", "gest", "neo", "rec"].map(type => {
+                if (activeTab !== type) return null;
+                const fichas = mare[type] || [];
+                const label = type === "gyn" ? "ginecológica" : type === "gest" ? "de gestación" : type === "neo" ? "neonatal" : "receptora";
+                return (
+                  <div key={type}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                      <button className="btn-add" style={{ marginBottom: 0 }} onClick={() => addFicha(type)}>＋ Nueva ficha {label}</button>
+                      {type === "gest" && (
+                        <button className="btn-cal" onClick={pushToCalendar}>
+                          🗓 Enviar a Calendar
+                        </button>
+                      )}
+                    </div>
+                    {fichas.length === 0 ? (
+                      <div className="empty">
+                        <div className="empty-icon">{type === "gyn" ? "🔬" : type === "gest" ? "🤰" : "🐴"}</div>
+                        <div className="empty-title">Sin fichas {label}s</div>
+                        <div className="empty-sub">Creá la primera ficha para esta yegua</div>
+                      </div>
+                    ) : (
+                      fichas.map((ficha, idx) => (
+                        <div key={idx} className="ficha-panel" style={{ marginBottom: 20 }}>
+                          <div style={{ display: "flex", alignItems: "center", marginBottom: 16 }}>
+                            <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 16, fontWeight: 600, color: "var(--stone-dark)" }}>
+                              Ficha {label} #{idx + 1}
+                              {ficha.fecha || ficha.fechaOvulacion || ficha.fechaNacimiento
+                                ? ` — ${formatDate(ficha.fecha || ficha.fechaOvulacion || ficha.fechaNacimiento)}`
+                                : ""}
+                            </span>
+                          </div>
+                          {type === "gyn" && <FichaGin data={ficha} onChange={d => updateFicha("gyn", idx, d)} isReceptora={mare.isReceptora} />}
+                          {type === "gest" && <FichaGest data={ficha} onChange={d => updateFicha("gest", idx, d)} isReceptora={mare.isReceptora} />}
+                          {type === "neo" && <FichaNeo data={ficha} onChange={d => updateFicha("neo", idx, d)} />}
+                          {type === "rec" && <FichaRec data={ficha} onChange={d => updateFicha("rec", idx, d)} />}
+                          <div className="ficha-actions">
+                            <button className="btn-secondary">Imprimir</button>
+                            <button className="btn-save" onClick={() => showToast("Ficha guardada ✓")}>Guardar</button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </div>
+
+          {/* ── INTERNACIÓN VIEW ── */}
+          {view === "internacion" && (
+            <>
+              <div className="section-title">Internación</div>
+              <div className="section-sub">Pacientes internados — cualquier equino</div>
+              <button className="btn-add" onClick={() => setModal("addPaciente")}>＋ Nuevo paciente</button>
+              {pacientes.length === 0 ? (
+                <div className="empty"><div className="empty-icon">🏥</div><div className="empty-title">Sin pacientes internados</div><div className="empty-sub">Registrá el primer paciente</div></div>
+              ) : (
+                <div className="grid">
+                  {pacientes.map(p => (
+                    <div key={p.id} className="int-card" onClick={() => { setSelectedPaciente(p.id); setView("paciente"); }}>
+                      <div className="mare-info" style={{padding:0}}>
+                        <div className="int-card-name">{p.nombre}</div>
+                        <div className="int-card-meta">
+                          {p.especie} · {p.sexo || "—"} · {p.raza || "—"} · {p.pelaje || "—"}
+                          {p.propietario && <> · {p.propietario}</>}
+                        </div>
+                        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:6}}>
+                          {p.internaciones.map((int, i) => (
+                            <span key={i} className={`int-badge ${int.fechaAlta ? "int-badge-alta" : "int-badge-activa"}`}>
+                              {int.fechaAlta ? `Alta ${formatDate(int.fechaAlta)}` : int.fechaIngreso ? `Internado ${formatDate(int.fechaIngreso)}` : `Internación ${i+1}`}
+                            </span>
+                          ))}
+                          {p.internaciones.length === 0 && <span style={{fontSize:11,color:"var(--stone-dark)"}}>Sin internaciones</span>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── PACIENTE VIEW ── */}
+          {view === "paciente" && currentPaciente() && (() => {
+            const pac = currentPaciente();
+            return (
+              <>
+                <div className="mare-detail-header">
+                  <div className="mare-detail-photo" style={{cursor:"default",fontSize:40}}>🐴</div>
+                  <div className="mare-detail-info">
+                    <div className="mare-detail-name">{pac.nombre}</div>
+                    <div className="mare-detail-meta">{pac.propietario || "Sin propietario"}{pac.haras ? ` · ${pac.haras}` : ""}</div>
+                    <div className="meta-grid">
+                      <div className="meta-item"><label>Especie</label><span>{pac.especie}</span></div>
+                      <div className="meta-item"><label>Sexo</label><span>{pac.sexo || "—"}</span></div>
+                      <div className="meta-item"><label>Pelaje</label><span>{pac.pelaje || "—"}</span></div>
+                      <div className="meta-item"><label>Raza</label><span>{pac.raza || "—"}</span></div>
+                      <div className="meta-item"><label>Madre</label><span>{pac.madre || "—"}</span></div>
+                      <div className="meta-item"><label>Padre</label><span>{pac.padre || "—"}</span></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+                  <button className="btn-add" style={{marginBottom:0}} onClick={() => addInternacion(pac.id)}>＋ Nueva internación</button>
+                </div>
+
+                {pac.internaciones.length === 0 ? (
+                  <div className="empty"><div className="empty-icon">📋</div><div className="empty-title">Sin internaciones</div><div className="empty-sub">Registrá la primera internación</div></div>
+                ) : (
+                  pac.internaciones.map((int, idx) => (
+                    <div key={idx} className="ficha-panel" style={{marginBottom:20}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+                        <span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,fontWeight:600,color:"var(--stone-dark)"}}>
+                          Internación #{idx + 1}
+                          {int.fechaIngreso ? ` — Ingreso: ${formatDate(int.fechaIngreso)}` : ""}
+                          {int.fechaAlta ? ` · Alta: ${formatDate(int.fechaAlta)}` : " · En curso"}
+                        </span>
+                        <span className={`int-badge ${int.fechaAlta ? "int-badge-alta" : "int-badge-activa"}`}>
+                          {int.fechaAlta ? "Alta" : "Internado"}
+                        </span>
+                      </div>
+                      <FichaInternacion data={int} onChange={d => updateInternacion(pac.id, idx, d)} />
+                      <div className="ficha-actions">
+                        <button className="btn-save" onClick={() => showToast("Internación guardada ✓")}>Guardar</button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </>
+            );
+          })()}
+
+
+          {/* ── ESTADÍSTICAS VIEW ── */}
+          {view === "estadisticas" && (() => {
+            // ── Compute stats from all haras ──
+            const allMares = harasList.flatMap(h => h.mares.map(m => ({...m, harasName: h.name})));
+
+            // Per haras stats
+            const harasStats = harasList.map(h => {
+              const mares = h.mares;
+              const totalGest = mares.reduce((acc, m) => acc + (m.gest?.length || 0), 0);
+              const preñadas = mares.reduce((acc, m) => acc + (m.gest?.filter(g =>
+                g.eco1 && g.resultado1?.includes('Positivo') ||
+                g.eco2 && g.resultado2?.includes('Positivo') ||
+                g.eco3 && g.resultado3?.includes('Positivo') ||
+                g.observaciones?.toLowerCase().includes('preñez ok') ||
+                g.observaciones?.toLowerCase().includes('preñez confirmada')
+              ).length || 0), 0);
+              const perdidas = mares.reduce((acc, m) => acc + (m.gest?.filter(g => g.perdioPreniez).length || 0), 0);
+              return { name: h.name, total: mares.length, fichas: totalGest, preñadas, perdidas };
+            }).filter(h => h.total > 0);
+
+            // Per padrillo stats
+            const padrilloMap = {};
+            allMares.forEach(m => {
+              [...(m.gest || []), ...(m.gyn || [])].forEach(f => {
+                const p = f.padrillo;
+                if (!p) return;
+                if (!padrilloMap[p]) padrilloMap[p] = { servicios: 0, preñadas: 0 };
+                padrilloMap[p].servicios++;
+                const pos = f.resultado1?.includes('Positivo') || f.resultado2?.includes('Positivo') ||
+                  f.resultado3?.includes('Positivo') ||
+                  f.observaciones?.toLowerCase().includes('preñez ok') ||
+                  f.observaciones?.toLowerCase().includes('preñez confirmada');
+                if (pos) padrilloMap[p].preñadas++;
+              });
+            });
+            const padrilloStats = Object.entries(padrilloMap)
+              .map(([name, d]) => ({ name, ...d, pct: d.servicios ? Math.round(d.preñadas/d.servicios*100) : 0 }))
+              .sort((a,b) => b.servicios - a.servicios).slice(0, 10);
+
+            // Per técnica
+            const tecnicaMap = {};
+            allMares.forEach(m => {
+              (m.gyn || []).forEach(f => {
+                const t = f.tecnica || 'IA';
+                if (!tecnicaMap[t]) tecnicaMap[t] = { total: 0, preñadas: 0 };
+                tecnicaMap[t].total++;
+                const pos = f.resultado1?.includes('Positivo') || f.resultado2?.includes('Positivo') ||
+                  f.resultado3?.includes('Positivo') ||
+                  f.observaciones?.toLowerCase().includes('preñez ok') ||
+                  f.observaciones?.toLowerCase().includes('preñez confirmada');
+                if (pos) tecnicaMap[t].preñadas++;
+              });
+            });
+            const tecnicaColors = { IA: '#7a8c6e', TE: '#b8953a', ICSI: '#6a5a8b', OPU: '#8b4a2f' };
+
+            // Per yegua historial
+            const yeguaStats = allMares
+              .filter(m => (m.gyn?.length || 0) + (m.gest?.length || 0) > 0)
+              .map(m => {
+                const ciclos = (m.gyn?.length || 0);
+                const preñadas = (m.gest?.filter(g =>
+                  g.observaciones?.toLowerCase().includes('preñez ok') ||
+                  g.observaciones?.toLowerCase().includes('preñez confirmada') ||
+                  g.resultado1?.includes('Positivo') || g.resultado2?.includes('Positivo')
+                ).length || 0) + (m.gyn?.filter(g =>
+                  g.resultado1?.includes('Positivo') || g.resultado2?.includes('Positivo') ||
+                  g.observaciones?.toLowerCase().includes('preñez ok') ||
+                  g.observaciones?.toLowerCase().includes('preñez confirmada')
+                ).length || 0);
+                const perdidas = (m.gest?.filter(g => g.perdioPreniez).length || 0);
+                return { name: m.name, haras: m.harasName, ciclos, preñadas, perdidas };
+              }).sort((a,b) => b.ciclos - a.ciclos);
+
+            const totalMares = allMares.length;
+            const totalPreñadas = harasStats.reduce((a,h) => a + h.preñadas, 0);
+            const totalFichas = harasStats.reduce((a,h) => a + h.fichas, 0);
+            const pctGlobal = totalFichas ? Math.round(totalPreñadas/totalFichas*100) : 0;
+
+            return (
+              <>
+                <div className="section-title">Estadísticas reproductivas</div>
+                <div className="section-sub">Temporada 2025-26 · Todos los haras</div>
+
+                {/* KPIs */}
+                <div className="stats-grid" style={{gridTemplateColumns:"repeat(auto-fill, minmax(160px,1fr))", marginBottom:28}}>
+                  {[
+                    { label: "Yeguas totales", val: totalMares, color: "var(--ink)" },
+                    { label: "Fichas gestación", val: totalFichas, color: "var(--sage)" },
+                    { label: "Preñeces confirmadas", val: totalPreñadas, color: "#b8953a" },
+                    { label: "Tasa global", val: pctGlobal + "%", color: pctGlobal >= 60 ? "var(--sage)" : "var(--rust)" },
+                  ].map(k => (
+                    <div key={k.label} className="stat-card" style={{textAlign:"center"}}>
+                      <div style={{fontFamily:"'Cormorant Garamond',serif", fontSize:44, fontWeight:600, color:k.color}}>{k.val}</div>
+                      <div style={{fontSize:11, color:"var(--stone-dark)", marginTop:4}}>{k.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="stats-grid">
+                  {/* Por haras */}
+                  <div className="stat-card">
+                    <div className="stat-card-title">🏡 Por haras</div>
+                    {harasStats.map(h => (
+                      <div key={h.name} className="stat-bar-row">
+                        <div className="stat-bar-label">{h.name}</div>
+                        <div className="stat-bar-track">
+                          <div className="stat-bar-fill" style={{
+                            width: h.fichas ? `${Math.round(h.preñadas/h.fichas*100)}%` : '0%',
+                            background: "var(--sage)"
+                          }} />
+                        </div>
+                        <div className="stat-bar-pct" style={{color:"var(--sage)"}}>
+                          {h.fichas ? Math.round(h.preñadas/h.fichas*100) : 0}%
+                        </div>
+                      </div>
+                    ))}
+                    <div style={{fontSize:10,color:"var(--stone-dark)",marginTop:12}}>Preñeces confirmadas / fichas gestación</div>
+                  </div>
+
+                  {/* Por técnica */}
+                  <div className="stat-card">
+                    <div className="stat-card-title">🔬 Por técnica</div>
+                    {Object.entries(tecnicaMap).map(([tec, d]) => (
+                      <div key={tec} className="stat-bar-row">
+                        <div className="stat-bar-label">{tec} ({d.total} serv.)</div>
+                        <div className="stat-bar-track">
+                          <div className="stat-bar-fill" style={{
+                            width: d.total ? `${Math.round(d.preñadas/d.total*100)}%` : '0%',
+                            background: tecnicaColors[tec] || "var(--sage)"
+                          }} />
+                        </div>
+                        <div className="stat-bar-pct" style={{color: tecnicaColors[tec] || "var(--sage)"}}>
+                          {d.total ? Math.round(d.preñadas/d.total*100) : 0}%
+                        </div>
+                      </div>
+                    ))}
+                    <div style={{fontSize:10,color:"var(--stone-dark)",marginTop:12}}>Tasa de preñez por técnica reproductiva</div>
+                  </div>
+
+                  {/* Por padrillo */}
+                  <div className="stat-card" style={{gridColumn:"span 1"}}>
+                    <div className="stat-card-title">🐎 Por padrillo (top 10)</div>
+                    {padrilloStats.map(p => (
+                      <div key={p.name} className="stat-bar-row">
+                        <div className="stat-bar-label" title={p.name}>{p.name}</div>
+                        <div className="stat-bar-track">
+                          <div className="stat-bar-fill" style={{width:`${p.pct}%`, background:"var(--gold)"}} />
+                        </div>
+                        <div className="stat-bar-pct" style={{color:"var(--gold)"}}>{p.pct}%</div>
+                      </div>
+                    ))}
+                    <div style={{fontSize:10,color:"var(--stone-dark)",marginTop:12}}>Servicios con resultado positivo</div>
+                  </div>
+                </div>
+
+                {/* Por yegua */}
+                <div className="stat-card" style={{marginTop:0}}>
+                  <div className="stat-card-title">🐴 Historial por yegua</div>
+                  <div style={{overflowX:"auto"}}>
+                    <table className="stat-table">
+                      <thead>
+                        <tr>
+                          <th>Yegua</th>
+                          <th>Haras</th>
+                          <th>Ciclos</th>
+                          <th>Preñeces</th>
+                          <th>Pérdidas</th>
+                          <th>Tasa</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {yeguaStats.map(y => (
+                          <tr key={y.name+y.haras}>
+                            <td style={{fontWeight:500}}>{y.name}</td>
+                            <td style={{color:"var(--stone-dark)"}}>{y.haras}</td>
+                            <td style={{textAlign:"center"}}>{y.ciclos}</td>
+                            <td style={{textAlign:"center"}}>
+                              <span className={y.preñadas > 0 ? "badge-pos" : "badge-pend"}>{y.preñadas}</span>
+                            </td>
+                            <td style={{textAlign:"center"}}>
+                              {y.perdidas > 0 ? <span className="badge-neg">{y.perdidas}</span> : <span style={{color:"var(--stone-dark)"}}>—</span>}
+                            </td>
+                            <td style={{textAlign:"center", fontWeight:600,
+                              color: y.ciclos ? (y.preñadas/y.ciclos >= 0.5 ? "var(--sage)" : "var(--rust)") : "var(--stone-dark)"}}>
+                              {y.ciclos ? Math.round(y.preñadas/y.ciclos*100) + "%" : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+
+        {/* ── MODALS ── */}
+        {modal === "addHaras" && (
+          <div className="modal-overlay" onClick={() => setModal(null)}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-title">Nuevo haras</div>
+              <div className="form-group">
+                <label>Nombre del haras</label>
+                <input autoFocus value={newHarasName} onChange={e => setNewHarasName(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && addHaras()} />
+              </div>
+              <div className="modal-actions">
+                <button className="btn-secondary" onClick={() => setModal(null)}>Cancelar</button>
+                <button className="btn-save" onClick={addHaras}>Agregar</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {modal === "addMare" && (
+          <div className="modal-overlay" onClick={() => setModal(null)}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-title">Nueva yegua</div>
+              <div className="form-grid" style={{ marginBottom: 14 }}>
+                {[["name","Nombre *"],["breed","Raza"],["born","Año nacimiento"],["color","Pelaje"],["rp","RP"],["chip","N° chip"]].map(([k, label]) => (
+                  <div key={k} className="form-group">
+                    <label>{label}</label>
+                    <input value={newMare[k]} onChange={e => setNewMare(p => ({ ...p, [k]: e.target.value }))} />
+                  </div>
+                ))}
+              </div>
+              <div className="form-group" style={{ marginBottom: 14 }}>
+                <div className="checkbox-row">
+                  <input type="checkbox" id="isRec" checked={newMare.isReceptora} onChange={e => setNewMare(p => ({ ...p, isReceptora: e.target.checked }))} />
+                  <label htmlFor="isRec" style={{fontSize:13,color:"#6a5a8b",fontWeight:500}}>🔁 Esta yegua es receptora</label>
+                </div>
+              </div>
+              <div className="modal-actions">
+                <button className="btn-secondary" onClick={() => setModal(null)}>Cancelar</button>
+                <button className="btn-save" onClick={addMare}>Agregar yegua</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {modal === "addPaciente" && (
+          <div className="modal-overlay" onClick={() => setModal(null)}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{maxWidth:540}}>
+              <div className="modal-title">Nuevo paciente</div>
+              <div className="form-grid" style={{marginBottom:14}}>
+                <div className="form-group full"><label>Nombre *</label>
+                  <input autoFocus value={newPaciente.nombre} onChange={e => setNewPaciente(p => ({...p, nombre: e.target.value}))} />
+                </div>
+                <div className="form-group"><label>Especie</label>
+                  <select value={newPaciente.especie} onChange={e => setNewPaciente(p => ({...p, especie: e.target.value}))}>
+                    <option>Equino</option><option>Bovino</option><option>Otro</option>
+                  </select>
+                </div>
+                <div className="form-group"><label>Sexo</label>
+                  <select value={newPaciente.sexo} onChange={e => setNewPaciente(p => ({...p, sexo: e.target.value}))}>
+                    <option value="">—</option><option>Macho</option><option>Hembra</option><option>Castrado</option>
+                  </select>
+                </div>
+                <div className="form-group"><label>Pelaje</label>
+                  <input value={newPaciente.pelaje} onChange={e => setNewPaciente(p => ({...p, pelaje: e.target.value}))} />
+                </div>
+                <div className="form-group"><label>Raza</label>
+                  <input value={newPaciente.raza} onChange={e => setNewPaciente(p => ({...p, raza: e.target.value}))} />
+                </div>
+                <div className="form-group"><label>Madre</label>
+                  <input value={newPaciente.madre} onChange={e => setNewPaciente(p => ({...p, madre: e.target.value}))} />
+                </div>
+                <div className="form-group"><label>Padre</label>
+                  <input value={newPaciente.padre} onChange={e => setNewPaciente(p => ({...p, padre: e.target.value}))} />
+                </div>
+                <div className="form-group"><label>Propietario</label>
+                  <input value={newPaciente.propietario} onChange={e => setNewPaciente(p => ({...p, propietario: e.target.value}))} placeholder="Ej: G. Solá" />
+                </div>
+                <div className="form-group"><label>Haras / Establecimiento</label>
+                  <input value={newPaciente.haras} onChange={e => setNewPaciente(p => ({...p, haras: e.target.value}))} />
+                </div>
+              </div>
+              <div className="modal-actions">
+                <button className="btn-secondary" onClick={() => setModal(null)}>Cancelar</button>
+                <button className="btn-save" onClick={addPaciente}>Agregar paciente</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TOAST */}
+        {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
+      </div>
+    </>
+  );
+}
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
