@@ -215,9 +215,12 @@ async function initData() {
     for (const h of haras) {
       const yeguas = await dbGet('yeguas', '&haras_id=eq.'+h.id);
       for (const y of yeguas) {
-        y.gyn = await dbGet('gyn', '&yegua_id=eq.'+y.id+'&order=id.desc');
-        y.gest = await dbGet('gestacion', '&yegua_id=eq.'+y.id+'&order=id.desc');
-        y.neo = await dbGet('neonatologia', '&yegua_id=eq.'+y.id+'&order=id.desc');
+        try { y.gyn = await dbGet('gyn', '&yegua_id=eq.'+y.id+'&order=id.desc'); } catch { y.gyn = []; }
+        try { y.gest = await dbGet('gestacion', '&yegua_id=eq.'+y.id+'&order=id.desc'); } catch { y.gest = []; }
+        try { y.neo = await dbGet('neonatologia', '&yegua_id=eq.'+y.id+'&order=id.desc'); } catch { y.neo = []; }
+        y.gyn = y.gyn || [];
+        y.gest = y.gest || [];
+        y.neo = y.neo || [];
         y.rec = [];
         y.mares = [];
       }
