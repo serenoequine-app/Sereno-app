@@ -40,7 +40,7 @@
     observer.observe(document.getElementById('root'), {childList: true});
   </script>
   <script type="text/babel">
-const { useState, useRef, useCallback, useEffect } = React;
+const { useState, useRef, useCallback } = React;
 
 const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID";
 
@@ -1673,23 +1673,17 @@ function FichaInternacion({ data, onChange }) {
   );
 }
 
-// ─── MAIN APP ─────────────────────────────────────────────────────────────────
+// ─── STORAGE ─────────────────────────────────────────────────────────────────
 const STORAGE_KEY = "sereno_v2";
-
 function loadState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {}
+  try { const r = localStorage.getItem(STORAGE_KEY); if (r) return JSON.parse(r); } catch {}
   return null;
 }
-
-function saveState(harasList, pacientes) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ harasList, pacientes }));
-  } catch {}
+function saveState(harasList, pacientes, padrillosList) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ harasList, pacientes, padrillosList })); } catch {}
 }
 
+// ─── MAIN APP ─────────────────────────────────────────────────────────────────
 function App() {
   const saved = loadState();
   const [harasList, setHarasList] = useState(saved?.harasList || INITIAL_HARAS);
@@ -1707,17 +1701,17 @@ function App() {
   const [calConnected, setCalConnected] = useState(false);
   const [newHarasName, setNewHarasName] = useState("");
   const [newMare, setNewMare] = useState({ name: "", breed: "", born: "", color: "", rp: "", chip: "", isReceptora: false });
-  const photoInputRef = useRef();
+  const [selectedPadrillo, setSelectedPadrillo] = useState(null);
+  const [padrilloTab, setPadrilloTab] = useState("ficha");
+  const [padrillosList, setPadrillosList] = useState(saved?.padrillosList || []);
+  const [newPadrillo, setNewPadrillo] = useState({ nombre:"", raza:"", pelaje:"", born:"", propietario:"", reseña:"" });
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
   };
 
-  // ── Auto-save ──
-  useEffect(() => {
-    saveState(harasList, pacientes);
-  }, [harasList, pacientes]);
+  useEffect(() => { saveState(harasList, pacientes, padrillosList); }, [harasList, pacientes, padrillosList]);
 
   // ── Pacientes internacion ──
   const addPaciente = () => {
@@ -1835,13 +1829,12 @@ function App() {
   };
 
   const deleteFicha = (type, idx) => {
-    if (!window.confirm("¿Eliminar esta ficha? Esta acción no se puede deshacer.")) return;
+    if (!window.confirm("¿Eliminar esta ficha?")) return;
     updateHaras(selectedHaras, h => ({
       ...h,
       mares: h.mares.map(m => {
         if (m.id !== selectedMare.id) return m;
-        const arr = [...(m[type] || [])];
-        arr.splice(idx, 1);
+        const arr = [...(m[type] || [])]; arr.splice(idx, 1);
         return { ...m, [type]: arr };
       }),
     }));
@@ -1849,20 +1842,20 @@ function App() {
   };
 
   const deleteMare = (mareId) => {
-    if (!window.confirm("¿Eliminar esta yegua y todas sus fichas? Esta acción no se puede deshacer.")) return;
+    if (!window.confirm("¿Eliminar esta yegua y todas sus fichas?")) return;
     updateHaras(selectedHaras, h => ({ ...h, mares: h.mares.filter(m => m.id !== mareId) }));
     setView("mares");
     showToast("Yegua eliminada");
   };
 
   const deleteHaras = (hid) => {
-    if (!window.confirm("¿Eliminar este haras y todas sus yeguas? Esta acción no se puede deshacer.")) return;
+    if (!window.confirm("¿Eliminar este haras y todas sus yeguas?")) return;
     setHarasList(l => l.filter(h => h.id !== hid));
     showToast("Haras eliminado");
   };
 
   const deletePaciente = (pid) => {
-    if (!window.confirm("¿Eliminar este paciente y sus internaciones?")) return;
+    if (!window.confirm("¿Eliminar este paciente?")) return;
     setPacientes(prev => prev.filter(p => p.id !== pid));
     setView("internacion");
     showToast("Paciente eliminado");
@@ -1902,10 +1895,8 @@ function App() {
         {/* HEADER */}
         <div className="header">
           <div className="header-brand">
-            <div className="header-logo">🐴</div>
-            <div>
-              <div className="header-title">SERENO</div>
-              <div className="header-sub">Gestión reproductiva equina</div>
+                        <div>
+              <div style={fontSize:10,color:"var(--stone)",letterSpacing:"0.12em",textTransform:"uppercase",marginTop:2}>Gestión reproductiva equina</div>
             </div>
           </div>
           <button
@@ -1918,8 +1909,10 @@ function App() {
 
         {/* NAV TABS */}
         <div className="nav-tabs">
-          <button className={`nav-tab ${!["internacion","paciente"].includes(view) ? "active" : ""}`}
+          <button className={`nav-tab ${!["internacion","paciente","padrillos","padrillo","estadisticas"].includes(view) ? "active" : ""}`}
             onClick={() => setView("haras")}>🐴 Reproductivo</button>
+          <button className={`nav-tab ${["padrillos","padrillo"].includes(view) ? "active" : ""}`}
+            onClick={() => setView("padrillos")}>🐎 Padrillos</button>
           <button className={`nav-tab ${["internacion","paciente"].includes(view) ? "active" : ""}`}
             onClick={() => setView("internacion")}>🏥 Internación</button>
           <button className={`nav-tab ${view === "estadisticas" ? "active" : ""}`}
@@ -1928,12 +1921,18 @@ function App() {
 
         {/* BREADCRUMB */}
         <div className="breadcrumb">
-          {!["internacion","paciente","estadisticas"].includes(view) ? <>
+          {!["internacion","paciente","estadisticas","padrillos","padrillo"].includes(view) ? <>
             <span onClick={() => setView("haras")}>Haras</span>
             {view !== "haras" && <><span className="sep">›</span><span onClick={() => setView("mares")}>{haras?.name}</span></>}
             {view === "mare" && <><span className="sep">›</span><span className="active">{mare?.name}</span></>}
           </> : view === "estadisticas" ? <>
             <span className="active">Estadísticas</span>
+          </> : view === "padrillos" ? <>
+            <span className="active">Padrillos</span>
+          </> : view === "padrillo" ? <>
+            <span onClick={() => setView("padrillos")}>Padrillos</span>
+            <span className="sep">›</span>
+            <span className="active">{selectedPadrillo?.nombre}</span>
           </> : <>
             <span onClick={() => setView("internacion")}>Internación</span>
             {view === "paciente" && <><span className="sep">›</span><span className="active">{currentPaciente()?.nombre}</span></>}
@@ -1957,7 +1956,7 @@ function App() {
                     <div key={h.id} className="haras-card" onClick={() => { setSelectedHaras(h.id); setView("mares"); }}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                         <div className="haras-card-icon">🏡</div>
-                        <button className="delete-btn" title="Eliminar haras" onClick={e => { e.stopPropagation(); deleteHaras(h.id); }}>🗑</button>
+                        <button className="delete-btn" onClick={e => { e.stopPropagation(); deleteHaras(h.id); }}>🗑</button>
                       </div>
                       <div className="haras-card-name">{h.name}</div>
                       <div className="haras-card-count">{h.mares.length} yegua{h.mares.length !== 1 ? "s" : ""}</div>
@@ -1986,7 +1985,7 @@ function App() {
                       <div className="mare-info">
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                           <div className="mare-name">{m.name}</div>
-                          <button className="delete-btn" title="Eliminar yegua" onClick={e => { e.stopPropagation(); setSelectedMare(m); deleteMare(m.id); }}>🗑</button>
+                          <button className="delete-btn" onClick={e => { e.stopPropagation(); setSelectedMare(m); deleteMare(m.id); }}>🗑</button>
                         </div>
                         <div className="mare-breed">{m.breed || "Sin raza"} {m.born ? `· ${m.born}` : ""}</div>
                         <div className="mare-tags">
@@ -2015,10 +2014,7 @@ function App() {
                 </div>
                 <input ref={photoInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handlePhoto} />
                 <div className="mare-detail-info">
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                    <div className="mare-detail-name">{mare.name}</div>
-                    <button className="delete-btn" title="Eliminar yegua" style={{fontSize:18}} onClick={() => deleteMare(mare.id)}>🗑</button>
-                  </div>
+                  <div className="mare-detail-name">{mare.name}</div>
                   <div className="mare-detail-meta">{haras?.name}</div>
                   <div className="meta-grid">
                     <div className="meta-item"><label>Raza</label><span>{mare.breed || "—"}</span></div>
@@ -2072,14 +2068,14 @@ function App() {
                     ) : (
                       fichas.map((ficha, idx) => (
                         <div key={idx} className="ficha-panel" style={{ marginBottom: 20 }}>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent:"space-between", marginBottom: 16 }}>
                             <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 16, fontWeight: 600, color: "var(--stone-dark)" }}>
                               Ficha {label} #{idx + 1}
                               {ficha.fecha || ficha.fechaOvulacion || ficha.fechaNacimiento
                                 ? ` — ${formatDate(ficha.fecha || ficha.fechaOvulacion || ficha.fechaNacimiento)}`
                                 : ""}
                             </span>
-                            <button className="delete-btn" title="Eliminar ficha" onClick={() => deleteFicha(type, idx)}>🗑</button>
+                            <button className="delete-btn" onClick={() => deleteFicha(type, idx)}>🗑</button>
                           </div>
                           {type === "gyn" && <FichaGin data={ficha} onChange={d => updateFicha("gyn", idx, d)} isReceptora={mare.isReceptora} />}
                           {type === "gest" && <FichaGest data={ficha} onChange={d => updateFicha("gest", idx, d)} isReceptora={mare.isReceptora} />}
@@ -2099,6 +2095,170 @@ function App() {
           )}
         </div>
 
+          {/* ── PADRILLOS VIEW ── */}
+          {view === "padrillos" && (
+            <>
+              <div className="section-title">Padrillos</div>
+              <div className="section-sub">Registros de padrillos, espermogramas y extracciones</div>
+              <button className="btn-add" onClick={() => setModal("addPadrillo")}>＋ Agregar padrillo</button>
+              {padrillosList.length === 0 ? (
+                <div className="empty"><div className="empty-icon">🐎</div><div className="empty-title">Sin padrillos registrados</div><div className="empty-sub">Agregá el primer padrillo</div></div>
+              ) : (
+                <div className="grid">
+                  {padrillosList.map(p => (
+                    <div key={p.id} className="haras-card" onClick={() => { setSelectedPadrillo(p); setPadrilloTab("ficha"); setView("padrillo"); }}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                        <div className="haras-card-icon">🐎</div>
+                        <button className="delete-btn" onClick={e => { e.stopPropagation(); if(window.confirm("¿Eliminar este padrillo?")) { setPadrillosList(l => l.filter(x => x.id !== p.id)); showToast("Padrillo eliminado"); }}}>🗑</button>
+                      </div>
+                      <div className="haras-card-name">{p.nombre}</div>
+                      <div className="haras-card-count">{p.raza || "Sin raza"} · {p.propietario || "Sin propietario"}</div>
+                      <div className="haras-card-count" style={{marginTop:4}}>{p.espermogramas?.length || 0} espermograma(s) · {p.extracciones?.length || 0} extracción(es)</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── PADRILLO DETAIL VIEW ── */}
+          {view === "padrillo" && selectedPadrillo && (() => {
+            const pad = padrillosList.find(p => p.id === selectedPadrillo.id) || selectedPadrillo;
+            const updatePad = (updater) => setPadrillosList(l => l.map(p => p.id === pad.id ? updater(p) : p));
+
+            return (
+              <>
+                <div className="mare-detail-header">
+                  <div className="mare-detail-photo" style={{cursor:"default",fontSize:40}}>🐎</div>
+                  <div className="mare-detail-info">
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                      <div className="mare-detail-name">{pad.nombre}</div>
+                    </div>
+                    <div className="mare-detail-meta">{pad.propietario || "Sin propietario"}</div>
+                    <div className="meta-grid">
+                      <div className="meta-item"><label>Raza</label><span>{pad.raza || "—"}</span></div>
+                      <div className="meta-item"><label>Pelaje</label><span>{pad.pelaje || "—"}</span></div>
+                      <div className="meta-item"><label>Nacimiento</label><span>{pad.born || "—"}</span></div>
+                    </div>
+                    {pad.reseña && <div style={{marginTop:12,fontSize:13,color:"var(--stone-dark)",fontStyle:"italic"}}>"{pad.reseña}"</div>}
+                  </div>
+                </div>
+
+                {/* Tabs */}
+                <div className="fichas-tabs">
+                  <button className={`ficha-tab ${padrilloTab === "ficha" ? "active-gyn" : ""}`} onClick={() => setPadrilloTab("ficha")}>📋 Ficha</button>
+                  <button className={`ficha-tab ${padrilloTab === "espermogramas" ? "active-gest" : ""}`} onClick={() => setPadrilloTab("espermogramas")}>🔬 Espermogramas <span className="history-badge">{pad.espermogramas?.length || 0}</span></button>
+                  <button className={`ficha-tab ${padrilloTab === "extracciones" ? "active-neo" : ""}`} onClick={() => setPadrilloTab("extracciones")}>💉 Extracciones <span className="history-badge">{pad.extracciones?.length || 0}</span></button>
+                </div>
+
+                {/* FICHA tab */}
+                {padrilloTab === "ficha" && (
+                  <div className="ficha-panel">
+                    <div className="ficha-section-title">🐎 Datos del padrillo</div>
+                    <div className="form-grid">
+                      {[["nombre","Nombre *"],["raza","Raza"],["pelaje","Pelaje"],["born","Año nacimiento"],["propietario","Propietario"]].map(([k,lbl]) => (
+                        <div key={k} className="form-group">
+                          <label>{lbl}</label>
+                          <input value={pad[k] || ""} onChange={e => updatePad(p => ({...p, [k]: e.target.value}))} />
+                        </div>
+                      ))}
+                      <div className="form-group full">
+                        <label>Reseña</label>
+                        <textarea rows={3} value={pad.reseña || ""} onChange={e => updatePad(p => ({...p, reseña: e.target.value}))} placeholder="Descripción, logros, características..." />
+                      </div>
+                    </div>
+                    <div className="ficha-actions">
+                      <button className="btn-save" onClick={() => showToast("Padrillo guardado ✓")}>Guardar</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ESPERMOGRAMAS tab */}
+                {padrilloTab === "espermogramas" && (
+                  <div>
+                    <button className="btn-add" style={{marginBottom:16}} onClick={() => updatePad(p => ({...p, espermogramas: [...(p.espermogramas||[]), {fecha:"",veterinario:"",volumen:"",concentracion:"",motTotal:"",motProg:"",morfologia:"",vivosMuertos:"",obs:""}]}))}>＋ Nuevo espermograma</button>
+                    {(pad.espermogramas||[]).length === 0 ? (
+                      <div className="empty"><div className="empty-icon">🔬</div><div className="empty-title">Sin espermogramas</div><div className="empty-sub">Registrá el primer espermograma</div></div>
+                    ) : (pad.espermogramas||[]).map((esp, idx) => (
+                      <div key={idx} className="ficha-panel" style={{marginBottom:16}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+                          <span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,fontWeight:600,color:"var(--stone-dark)"}}>
+                            Espermograma #{idx+1}{esp.fecha ? ` — ${formatDate(esp.fecha)}` : ""}
+                          </span>
+                          <button className="delete-btn" onClick={() => { if(window.confirm("¿Eliminar?")) updatePad(p => ({...p, espermogramas: p.espermogramas.filter((_,i)=>i!==idx)})); }}>🗑</button>
+                        </div>
+                        <div className="form-grid">
+                          <div className="form-group"><label>Fecha</label><input type="date" value={esp.fecha||""} onChange={e => updatePad(p => ({...p, espermogramas: p.espermogramas.map((x,i)=>i===idx?{...x,fecha:e.target.value}:x)}))}/></div>
+                          <div className="form-group"><label>Veterinario</label><input value={esp.veterinario||""} onChange={e => updatePad(p => ({...p, espermogramas: p.espermogramas.map((x,i)=>i===idx?{...x,veterinario:e.target.value}:x)}))}/></div>
+                          <div className="form-group"><label>Volumen (ml)</label><input type="number" step="0.1" value={esp.volumen||""} onChange={e => updatePad(p => ({...p, espermogramas: p.espermogramas.map((x,i)=>i===idx?{...x,volumen:e.target.value}:x)}))}/></div>
+                          <div className="form-group"><label>Concentración (sptz/ml)</label><input value={esp.concentracion||""} onChange={e => updatePad(p => ({...p, espermogramas: p.espermogramas.map((x,i)=>i===idx?{...x,concentracion:e.target.value}:x)}))}/></div>
+                          <div className="form-group"><label>Motilidad total (%)</label><input type="number" min="0" max="100" value={esp.motTotal||""} onChange={e => updatePad(p => ({...p, espermogramas: p.espermogramas.map((x,i)=>i===idx?{...x,motTotal:e.target.value}:x)}))}/></div>
+                          <div className="form-group"><label>Motilidad progresiva (%)</label><input type="number" min="0" max="100" value={esp.motProg||""} onChange={e => updatePad(p => ({...p, espermogramas: p.espermogramas.map((x,i)=>i===idx?{...x,motProg:e.target.value}:x)}))}/></div>
+                          <div className="form-group"><label>Morfología normal (%)</label><input type="number" min="0" max="100" value={esp.morfologia||""} onChange={e => updatePad(p => ({...p, espermogramas: p.espermogramas.map((x,i)=>i===idx?{...x,morfologia:e.target.value}:x)}))}/></div>
+                          <div className="form-group"><label>Vivos / Muertos (%)</label><input value={esp.vivosMuertos||""} onChange={e => updatePad(p => ({...p, espermogramas: p.espermogramas.map((x,i)=>i===idx?{...x,vivosMuertos:e.target.value}:x)}))}/></div>
+                          <div className="form-group full"><label>Observaciones</label><textarea rows={2} value={esp.obs||""} onChange={e => updatePad(p => ({...p, espermogramas: p.espermogramas.map((x,i)=>i===idx?{...x,obs:e.target.value}:x)}))}/></div>
+                        </div>
+                        <div className="ficha-actions">
+                          <button className="btn-save" onClick={() => showToast("Guardado ✓")}>Guardar</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* EXTRACCIONES tab */}
+                {padrilloTab === "extracciones" && (
+                  <div>
+                    <button className="btn-add" style={{marginBottom:16}} onClick={() => updatePad(p => ({...p, extracciones: [...(p.extracciones||[]), {fecha:"",propietario:"",veterinario:"",yegua:"",aafe:"",servicio:"",confirmado:"",pagado:""}]}))}>＋ Nueva extracción</button>
+                    {(pad.extracciones||[]).length === 0 ? (
+                      <div className="empty"><div className="empty-icon">💉</div><div className="empty-title">Sin extracciones</div><div className="empty-sub">Registrá la primera extracción</div></div>
+                    ) : (
+                      <div style={{overflowX:"auto"}}>
+                        <table className="eco-table" style={{minWidth:800}}>
+                          <thead>
+                            <tr>
+                              <th style={{minWidth:110}}>Fecha</th>
+                              <th style={{minWidth:130}}>Propietario</th>
+                              <th style={{minWidth:130}}>Veterinario</th>
+                              <th style={{minWidth:130}}>Yegua</th>
+                              <th style={{minWidth:80}}>AAFE</th>
+                              <th style={{minWidth:100}}>Servicio</th>
+                              <th style={{minWidth:100}}>Confirmado</th>
+                              <th style={{minWidth:100}}>Pagado</th>
+                              <th style={{minWidth:40}}></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(pad.extracciones||[]).map((ext, idx) => (
+                              <tr key={idx}>
+                                <td><input type="date" value={ext.fecha||""} onChange={e => updatePad(p => ({...p, extracciones: p.extracciones.map((x,i)=>i===idx?{...x,fecha:e.target.value}:x)}))}/></td>
+                                <td><input value={ext.propietario||""} onChange={e => updatePad(p => ({...p, extracciones: p.extracciones.map((x,i)=>i===idx?{...x,propietario:e.target.value}:x)}))}/></td>
+                                <td><input value={ext.veterinario||""} onChange={e => updatePad(p => ({...p, extracciones: p.extracciones.map((x,i)=>i===idx?{...x,veterinario:e.target.value}:x)}))}/></td>
+                                <td><input value={ext.yegua||""} onChange={e => updatePad(p => ({...p, extracciones: p.extracciones.map((x,i)=>i===idx?{...x,yegua:e.target.value}:x)}))}/></td>
+                                <td><input value={ext.aafe||""} onChange={e => updatePad(p => ({...p, extracciones: p.extracciones.map((x,i)=>i===idx?{...x,aafe:e.target.value}:x)}))}/></td>
+                                <td><input value={ext.servicio||""} onChange={e => updatePad(p => ({...p, extracciones: p.extracciones.map((x,i)=>i===idx?{...x,servicio:e.target.value}:x)}))}/></td>
+                                <td>
+                                  <select style={{border:"none",background:"transparent",padding:"6px",width:"100%",fontSize:12}} value={ext.confirmado||""} onChange={e => updatePad(p => ({...p, extracciones: p.extracciones.map((x,i)=>i===idx?{...x,confirmado:e.target.value}:x)}))}>
+                                    <option value="">—</option><option value="si">Sí</option><option value="no">No</option><option value="falta">Falta</option>
+                                  </select>
+                                </td>
+                                <td><input value={ext.pagado||""} onChange={e => updatePad(p => ({...p, extracciones: p.extracciones.map((x,i)=>i===idx?{...x,pagado:e.target.value}:x)}))}/></td>
+                                <td><button onClick={() => { if(window.confirm("¿Eliminar?")) updatePad(p => ({...p, extracciones: p.extracciones.filter((_,i)=>i!==idx)})); }} style={{background:"none",border:"none",color:"var(--rust)",cursor:"pointer",fontSize:14}}>✕</button></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    <div className="ficha-actions">
+                      <button className="btn-save" onClick={() => showToast("Extracciones guardadas ✓")}>Guardar</button>
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
+
           {/* ── INTERNACIÓN VIEW ── */}
           {view === "internacion" && (
             <>
@@ -2112,10 +2272,7 @@ function App() {
                   {pacientes.map(p => (
                     <div key={p.id} className="int-card" onClick={() => { setSelectedPaciente(p.id); setView("paciente"); }}>
                       <div className="mare-info" style={{padding:0}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                          <div className="int-card-name">{p.nombre}</div>
-                          <button className="delete-btn" title="Eliminar paciente" onClick={e => { e.stopPropagation(); setSelectedPaciente(p.id); deletePaciente(p.id); }}>🗑</button>
-                        </div>
+                        <div className="int-card-name">{p.nombre}</div>
                         <div className="int-card-meta">
                           {p.especie} · {p.sexo || "—"} · {p.raza || "—"} · {p.pelaje || "—"}
                           {p.propietario && <> · {p.propietario}</>}
@@ -2159,7 +2316,6 @@ function App() {
 
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
                   <button className="btn-add" style={{marginBottom:0}} onClick={() => addInternacion(pac.id)}>＋ Nueva internación</button>
-                  <button className="btn-secondary" style={{color:"var(--rust)",borderColor:"var(--rust)"}} onClick={() => deletePaciente(pac.id)}>🗑 Eliminar paciente</button>
                 </div>
 
                 {pac.internaciones.length === 0 ? (
@@ -2173,12 +2329,9 @@ function App() {
                           {int.fechaIngreso ? ` — Ingreso: ${formatDate(int.fechaIngreso)}` : ""}
                           {int.fechaAlta ? ` · Alta: ${formatDate(int.fechaAlta)}` : " · En curso"}
                         </span>
-                        <div style={{display:"flex",alignItems:"center",gap:10}}>
-                          <span className={`int-badge ${int.fechaAlta ? "int-badge-alta" : "int-badge-activa"}`}>
-                            {int.fechaAlta ? "Alta" : "Internado"}
-                          </span>
-                          <button className="delete-btn" title="Eliminar internación" onClick={() => deleteInternacion(pac.id, idx)}>🗑</button>
-                        </div>
+                        <span className={`int-badge ${int.fechaAlta ? "int-badge-alta" : "int-badge-activa"}`}>
+                          {int.fechaAlta ? "Alta" : "Internado"}
+                        </span>
                       </div>
                       <FichaInternacion data={int} onChange={d => updateInternacion(pac.id, idx, d)} />
                       <div className="ficha-actions">
@@ -2194,81 +2347,61 @@ function App() {
 
           {/* ── ESTADÍSTICAS VIEW ── */}
           {view === "estadisticas" && (() => {
-            // ── Compute stats from all haras ──
             const allMares = harasList.flatMap(h => h.mares.map(m => ({...m, harasName: h.name})));
 
-            // Per haras stats
+            // Función que determina si una ficha gyn resultó positiva
+            const esPositiva = (f) => f.resultado1?.includes('Positivo') || f.resultado2?.includes('Positivo') || f.resultado3?.includes('Positivo');
+
+            // Stats por haras — leyendo fichas ginecológicas
             const harasStats = harasList.map(h => {
               const mares = h.mares;
-              const totalGest = mares.reduce((acc, m) => acc + (m.gest?.length || 0), 0);
-              const preñadas = mares.reduce((acc, m) => acc + (m.gest?.filter(g =>
-                g.eco1 && g.resultado1?.includes('Positivo') ||
-                g.eco2 && g.resultado2?.includes('Positivo') ||
-                g.eco3 && g.resultado3?.includes('Positivo') ||
-                g.observaciones?.toLowerCase().includes('preñez ok') ||
-                g.observaciones?.toLowerCase().includes('preñez confirmada')
-              ).length || 0), 0);
+              const servicios = mares.reduce((acc, m) => acc + (m.gyn?.length || 0), 0);
+              const preñadas = mares.reduce((acc, m) => acc + (m.gyn?.filter(esPositiva).length || 0), 0);
               const perdidas = mares.reduce((acc, m) => acc + (m.gest?.filter(g => g.perdioPreniez).length || 0), 0);
-              return { name: h.name, total: mares.length, fichas: totalGest, preñadas, perdidas };
+              return { name: h.name, total: mares.length, servicios, preñadas, perdidas };
             }).filter(h => h.total > 0);
 
-            // Per padrillo stats
+            // Stats por padrillo
             const padrilloMap = {};
             allMares.forEach(m => {
-              [...(m.gest || []), ...(m.gyn || [])].forEach(f => {
+              (m.gyn || []).forEach(f => {
                 const p = f.padrillo;
                 if (!p) return;
                 if (!padrilloMap[p]) padrilloMap[p] = { servicios: 0, preñadas: 0 };
                 padrilloMap[p].servicios++;
-                const pos = f.resultado1?.includes('Positivo') || f.resultado2?.includes('Positivo') ||
-                  f.resultado3?.includes('Positivo') ||
-                  f.observaciones?.toLowerCase().includes('preñez ok') ||
-                  f.observaciones?.toLowerCase().includes('preñez confirmada');
-                if (pos) padrilloMap[p].preñadas++;
+                if (esPositiva(f)) padrilloMap[p].preñadas++;
               });
             });
             const padrilloStats = Object.entries(padrilloMap)
               .map(([name, d]) => ({ name, ...d, pct: d.servicios ? Math.round(d.preñadas/d.servicios*100) : 0 }))
               .sort((a,b) => b.servicios - a.servicios).slice(0, 10);
 
-            // Per técnica
+            // Stats por técnica
             const tecnicaMap = {};
             allMares.forEach(m => {
               (m.gyn || []).forEach(f => {
                 const t = f.tecnica || 'IA';
                 if (!tecnicaMap[t]) tecnicaMap[t] = { total: 0, preñadas: 0 };
                 tecnicaMap[t].total++;
-                const pos = f.resultado1?.includes('Positivo') || f.resultado2?.includes('Positivo') ||
-                  f.resultado3?.includes('Positivo') ||
-                  f.observaciones?.toLowerCase().includes('preñez ok') ||
-                  f.observaciones?.toLowerCase().includes('preñez confirmada');
-                if (pos) tecnicaMap[t].preñadas++;
+                if (esPositiva(f)) tecnicaMap[t].preñadas++;
               });
             });
             const tecnicaColors = { IA: '#7a8c6e', TE: '#b8953a', ICSI: '#6a5a8b', OPU: '#8b4a2f' };
 
-            // Per yegua historial
+            // Stats por yegua
             const yeguaStats = allMares
-              .filter(m => (m.gyn?.length || 0) + (m.gest?.length || 0) > 0)
+              .filter(m => (m.gyn?.length || 0) > 0)
               .map(m => {
-                const ciclos = (m.gyn?.length || 0);
-                const preñadas = (m.gest?.filter(g =>
-                  g.observaciones?.toLowerCase().includes('preñez ok') ||
-                  g.observaciones?.toLowerCase().includes('preñez confirmada') ||
-                  g.resultado1?.includes('Positivo') || g.resultado2?.includes('Positivo')
-                ).length || 0) + (m.gyn?.filter(g =>
-                  g.resultado1?.includes('Positivo') || g.resultado2?.includes('Positivo') ||
-                  g.observaciones?.toLowerCase().includes('preñez ok') ||
-                  g.observaciones?.toLowerCase().includes('preñez confirmada')
-                ).length || 0);
-                const perdidas = (m.gest?.filter(g => g.perdioPreniez).length || 0);
+                const ciclos = m.gyn?.length || 0;
+                const preñadas = m.gyn?.filter(esPositiva).length || 0;
+                const perdidas = m.gest?.filter(g => g.perdioPreniez).length || 0;
                 return { name: m.name, haras: m.harasName, ciclos, preñadas, perdidas };
               }).sort((a,b) => b.ciclos - a.ciclos);
 
             const totalMares = allMares.length;
+            const totalServicios = harasStats.reduce((a,h) => a + h.servicios, 0);
             const totalPreñadas = harasStats.reduce((a,h) => a + h.preñadas, 0);
-            const totalFichas = harasStats.reduce((a,h) => a + h.fichas, 0);
-            const pctGlobal = totalFichas ? Math.round(totalPreñadas/totalFichas*100) : 0;
+            const pctGlobal = totalServicios ? Math.round(totalPreñadas/totalServicios*100) : 0;
 
             return (
               <>
@@ -2279,7 +2412,7 @@ function App() {
                 <div className="stats-grid" style={{gridTemplateColumns:"repeat(auto-fill, minmax(160px,1fr))", marginBottom:28}}>
                   {[
                     { label: "Yeguas totales", val: totalMares, color: "var(--ink)" },
-                    { label: "Fichas gestación", val: totalFichas, color: "var(--sage)" },
+                    { label: "Servicios totales", val: totalServicios, color: "var(--sage)" },
                     { label: "Preñeces confirmadas", val: totalPreñadas, color: "#b8953a" },
                     { label: "Tasa global", val: pctGlobal + "%", color: pctGlobal >= 60 ? "var(--sage)" : "var(--rust)" },
                   ].map(k => (
@@ -2299,16 +2432,16 @@ function App() {
                         <div className="stat-bar-label">{h.name}</div>
                         <div className="stat-bar-track">
                           <div className="stat-bar-fill" style={{
-                            width: h.fichas ? `${Math.round(h.preñadas/h.fichas*100)}%` : '0%',
+                            width: h.servicios ? `${Math.round(h.preñadas/h.servicios*100)}%` : '0%',
                             background: "var(--sage)"
                           }} />
                         </div>
                         <div className="stat-bar-pct" style={{color:"var(--sage)"}}>
-                          {h.fichas ? Math.round(h.preñadas/h.fichas*100) : 0}%
+                          {h.servicios ? Math.round(h.preñadas/h.servicios*100) : 0}%
                         </div>
                       </div>
                     ))}
-                    <div style={{fontSize:10,color:"var(--stone-dark)",marginTop:12}}>Preñeces confirmadas / fichas gestación</div>
+                    <div style={{fontSize:10,color:"var(--stone-dark)",marginTop:12}}>Tasa de preñez por ficha ginecológica</div>
                   </div>
 
                   {/* Por técnica */}
@@ -2389,6 +2522,37 @@ function App() {
           })()}
 
         {/* ── MODALS ── */}
+        {modal === "addPadrillo" && (
+          <div className="modal-overlay" onClick={() => setModal(null)}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-title">Nuevo padrillo</div>
+              <div className="form-grid" style={{marginBottom:14}}>
+                {[["nombre","Nombre *"],["raza","Raza"],["pelaje","Pelaje"],["born","Año nacimiento"],["propietario","Propietario"]].map(([k,lbl]) => (
+                  <div key={k} className="form-group">
+                    <label>{lbl}</label>
+                    <input value={newPadrillo[k]||""} onChange={e => setNewPadrillo(p => ({...p,[k]:e.target.value}))} />
+                  </div>
+                ))}
+                <div className="form-group full">
+                  <label>Reseña</label>
+                  <textarea rows={2} value={newPadrillo.reseña||""} onChange={e => setNewPadrillo(p => ({...p,reseña:e.target.value}))} />
+                </div>
+              </div>
+              <div className="modal-actions">
+                <button className="btn-secondary" onClick={() => setModal(null)}>Cancelar</button>
+                <button className="btn-save" onClick={() => {
+                  if (!newPadrillo.nombre.trim()) return;
+                  const pad = { id: Date.now(), ...newPadrillo, espermogramas: [], extracciones: [] };
+                  setPadrillosList(l => [...l, pad]);
+                  setNewPadrillo({ nombre:"", raza:"", pelaje:"", born:"", propietario:"", reseña:"" });
+                  setModal(null);
+                  showToast(`${pad.nombre} agregado`);
+                }}>Agregar</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {modal === "addHaras" && (
           <div className="modal-overlay" onClick={() => setModal(null)}>
             <div className="modal" onClick={e => e.stopPropagation()}>
