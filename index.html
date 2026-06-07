@@ -1684,9 +1684,9 @@ function loadState() {
   return null;
 }
 
-function saveState(harasList, pacientes) {
+function saveState(harasList, pacientes, padrillosList) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ harasList, pacientes }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ harasList, pacientes, padrillosList }));
   } catch {}
 }
 
@@ -1703,6 +1703,10 @@ function App() {
   const [modal, setModal] = useState(null); // null | "addHaras" | "addMare" | "addPaciente"
   const [selectedPaciente, setSelectedPaciente] = useState(null);
   const [newPaciente, setNewPaciente] = useState({ nombre: "", especie: "Equino", sexo: "", pelaje: "", raza: "", madre: "", padre: "", propietario: "", haras: "" });
+  const [padrillosList, setPadrillosList] = useState(saved?.padrillosList || []);
+  const [selectedPadrillo, setSelectedPadrillo] = useState(null);
+  const [padrilloTab, setPadrilloTab] = useState("ficha");
+  const [newPadrillo, setNewPadrillo] = useState({ nombre:"", raza:"", pelaje:"", born:"", propietario:"", reseña:"" });
   const [toast, setToast] = useState(null);
   const [calConnected, setCalConnected] = useState(false);
   const [newHarasName, setNewHarasName] = useState("");
@@ -1716,8 +1720,8 @@ function App() {
 
   // ── Auto-save ──
   useEffect(() => {
-    saveState(harasList, pacientes);
-  }, [harasList, pacientes]);
+    saveState(harasList, pacientes, padrillosList);
+  }, [harasList, pacientes, padrillosList]);
 
   // ── Pacientes internacion ──
   const addPaciente = () => {
@@ -1918,8 +1922,10 @@ function App() {
 
         {/* NAV TABS */}
         <div className="nav-tabs">
-          <button className={`nav-tab ${!["internacion","paciente"].includes(view) ? "active" : ""}`}
+          <button className={`nav-tab ${!["internacion","paciente","padrillos","padrillo","estadisticas"].includes(view) ? "active" : ""}`}
             onClick={() => setView("haras")}>🐴 Reproductivo</button>
+          <button className={`nav-tab ${["padrillos","padrillo"].includes(view) ? "active" : ""}`}
+            onClick={() => setView("padrillos")}>🐎 Padrillos</button>
           <button className={`nav-tab ${["internacion","paciente"].includes(view) ? "active" : ""}`}
             onClick={() => setView("internacion")}>🏥 Internación</button>
           <button className={`nav-tab ${view === "estadisticas" ? "active" : ""}`}
@@ -1939,6 +1945,8 @@ function App() {
             {view === "paciente" && <><span className="sep">›</span><span className="active">{currentPaciente()?.nombre}</span></>}
           </>}
           {view === "estadisticas" && <span className="active">Estadísticas reproductivas</span>}
+          {view === "padrillos" && <span className="active">Padrillos</span>}
+          {view === "padrillo" && <><span onClick={() => setView("padrillos")} style={{cursor:"pointer"}}>Padrillos</span><span className="sep">›</span><span className="active">{selectedPadrillo?.nombre}</span></>}
         </div>
 
         <div className="main">
@@ -2098,6 +2106,137 @@ function App() {
             </>
           )}
         </div>
+
+          {/* ── PADRILLOS VIEW ── */}
+          {view === "padrillos" && (
+            <>
+              <div className="section-title">Padrillos</div>
+              <div className="section-sub">Fichas, espermogramas y extracciones</div>
+              <button className="btn-add" onClick={() => setModal("addPadrillo")}>＋ Agregar padrillo</button>
+              {padrillosList.length === 0 ? (
+                <div className="empty"><div className="empty-icon">🐎</div><div className="empty-title">Sin padrillos</div><div className="empty-sub">Agregá el primer padrillo</div></div>
+              ) : (
+                <div className="grid">
+                  {padrillosList.map(p => (
+                    <div key={p.id} className="haras-card" onClick={() => { setSelectedPadrillo(p); setPadrilloTab("ficha"); setView("padrillo"); }}>
+                      <div style={{display:"flex",justifyContent:"space-between"}}>
+                        <div className="haras-card-icon">🐎</div>
+                        <button className="delete-btn" onClick={e => { e.stopPropagation(); if(window.confirm("¿Eliminar padrillo?")) { setPadrillosList(l => l.filter(x => x.id !== p.id)); showToast("Eliminado"); }}}>🗑</button>
+                      </div>
+                      <div className="haras-card-name">{p.nombre}</div>
+                      <div className="haras-card-count">{p.raza||"Sin raza"} · {p.propietario||"Sin propietario"}</div>
+                      <div className="haras-card-count">{(p.espermogramas||[]).length} espermograma(s) · {(p.extracciones||[]).length} extracción(es)</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── PADRILLO DETAIL ── */}
+          {view === "padrillo" && selectedPadrillo && (() => {
+            const pad = padrillosList.find(p => p.id === selectedPadrillo.id) || selectedPadrillo;
+            const updatePad = fn => setPadrillosList(l => l.map(p => p.id === pad.id ? fn(p) : p));
+            return (
+              <>
+                <div className="mare-detail-header">
+                  <div className="mare-detail-photo" style={{cursor:"default",fontSize:40}}>🐎</div>
+                  <div className="mare-detail-info">
+                    <div className="mare-detail-name">{pad.nombre}</div>
+                    <div className="mare-detail-meta">{pad.propietario||"Sin propietario"}</div>
+                    <div className="meta-grid">
+                      <div className="meta-item"><label>Raza</label><span>{pad.raza||"—"}</span></div>
+                      <div className="meta-item"><label>Pelaje</label><span>{pad.pelaje||"—"}</span></div>
+                      <div className="meta-item"><label>Nacimiento</label><span>{pad.born||"—"}</span></div>
+                    </div>
+                    {pad.reseña && <div style={{marginTop:10,fontSize:13,color:"var(--stone-dark)",fontStyle:"italic"}}>"{pad.reseña}"</div>}
+                  </div>
+                </div>
+
+                <div className="fichas-tabs">
+                  <button className={`ficha-tab ${padrilloTab==="ficha"?"active-gyn":""}`} onClick={() => setPadrilloTab("ficha")}>📋 Ficha</button>
+                  <button className={`ficha-tab ${padrilloTab==="espermogramas"?"active-gest":""}`} onClick={() => setPadrilloTab("espermogramas")}>🔬 Espermogramas ({(pad.espermogramas||[]).length})</button>
+                  <button className={`ficha-tab ${padrilloTab==="extracciones"?"active-neo":""}`} onClick={() => setPadrilloTab("extracciones")}>💉 Extracciones ({(pad.extracciones||[]).length})</button>
+                </div>
+
+                {padrilloTab === "ficha" && (
+                  <div className="ficha-panel">
+                    <div className="ficha-section-title">🐎 Datos</div>
+                    <div className="form-grid">
+                      {[["nombre","Nombre"],["raza","Raza"],["pelaje","Pelaje"],["born","Año nac."],["propietario","Propietario"]].map(([k,lbl]) => (
+                        <div key={k} className="form-group">
+                          <label>{lbl}</label>
+                          <input value={pad[k]||""} onChange={e => updatePad(p => ({...p,[k]:e.target.value}))} />
+                        </div>
+                      ))}
+                      <div className="form-group full"><label>Reseña</label><textarea rows={3} value={pad.reseña||""} onChange={e => updatePad(p => ({...p,reseña:e.target.value}))} /></div>
+                    </div>
+                    <div className="ficha-actions"><button className="btn-save" onClick={() => showToast("Guardado ✓")}>Guardar</button></div>
+                  </div>
+                )}
+
+                {padrilloTab === "espermogramas" && (
+                  <div>
+                    <button className="btn-add" style={{marginBottom:16}} onClick={() => updatePad(p => ({...p, espermogramas:[...(p.espermogramas||[]),{fecha:"",veterinario:"",volumen:"",concentracion:"",motTotal:"",motProg:"",morfologia:"",vivosMuertos:"",obs:""}]}))}>＋ Nuevo espermograma</button>
+                    {(pad.espermogramas||[]).map((esp,idx) => (
+                      <div key={idx} className="ficha-panel" style={{marginBottom:16}}>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:14}}>
+                          <span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,fontWeight:600}}>Espermograma #{idx+1}{esp.fecha?` — ${formatDate(esp.fecha)}`:""}</span>
+                          <button className="delete-btn" onClick={() => { if(window.confirm("¿Eliminar?")) updatePad(p => ({...p,espermogramas:p.espermogramas.filter((_,i)=>i!==idx)})); }}>🗑</button>
+                        </div>
+                        <div className="form-grid">
+                          {[["fecha","Fecha","date"],["veterinario","Veterinario","text"],["volumen","Volumen (ml)","number"],["concentracion","Concentración (sptz/ml)","text"],["motTotal","Motilidad total (%)","number"],["motProg","Motilidad progresiva (%)","number"],["morfologia","Morfología normal (%)","number"],["vivosMuertos","Vivos/Muertos (%)","text"]].map(([k,lbl,t]) => (
+                            <div key={k} className="form-group">
+                              <label>{lbl}</label>
+                              <input type={t} value={esp[k]||""} onChange={e => updatePad(p => ({...p,espermogramas:p.espermogramas.map((x,i)=>i===idx?{...x,[k]:e.target.value}:x)}))} />
+                            </div>
+                          ))}
+                          <div className="form-group full"><label>Observaciones</label><textarea rows={2} value={esp.obs||""} onChange={e => updatePad(p => ({...p,espermogramas:p.espermogramas.map((x,i)=>i===idx?{...x,obs:e.target.value}:x)}))}/></div>
+                        </div>
+                        <div className="ficha-actions"><button className="btn-save" onClick={() => showToast("Guardado ✓")}>Guardar</button></div>
+                      </div>
+                    ))}
+                    {(pad.espermogramas||[]).length === 0 && <div className="empty"><div className="empty-icon">🔬</div><div className="empty-title">Sin espermogramas</div></div>}
+                  </div>
+                )}
+
+                {padrilloTab === "extracciones" && (
+                  <div>
+                    <button className="btn-add" style={{marginBottom:16}} onClick={() => updatePad(p => ({...p,extracciones:[...(p.extracciones||[]),{fecha:"",propietario:"",veterinario:"",yegua:"",aafe:"",servicio:"",confirmado:"",pagado:""}]}))}>＋ Nueva extracción</button>
+                    {(pad.extracciones||[]).length === 0 ? (
+                      <div className="empty"><div className="empty-icon">💉</div><div className="empty-title">Sin extracciones</div></div>
+                    ) : (
+                      <div style={{overflowX:"auto"}}>
+                        <table className="eco-table" style={{minWidth:760}}>
+                          <thead><tr>
+                            <th>Fecha</th><th>Propietario</th><th>Veterinario</th><th>Yegua</th><th>AAFE</th><th>Servicio</th><th>Confirmado</th><th>Pagado</th><th></th>
+                          </tr></thead>
+                          <tbody>
+                            {(pad.extracciones||[]).map((ext,idx) => (
+                              <tr key={idx}>
+                                <td><input type="date" value={ext.fecha||""} onChange={e => updatePad(p => ({...p,extracciones:p.extracciones.map((x,i)=>i===idx?{...x,fecha:e.target.value}:x)}))}/></td>
+                                <td><input value={ext.propietario||""} onChange={e => updatePad(p => ({...p,extracciones:p.extracciones.map((x,i)=>i===idx?{...x,propietario:e.target.value}:x)}))}/></td>
+                                <td><input value={ext.veterinario||""} onChange={e => updatePad(p => ({...p,extracciones:p.extracciones.map((x,i)=>i===idx?{...x,veterinario:e.target.value}:x)}))}/></td>
+                                <td><input value={ext.yegua||""} onChange={e => updatePad(p => ({...p,extracciones:p.extracciones.map((x,i)=>i===idx?{...x,yegua:e.target.value}:x)}))}/></td>
+                                <td><input value={ext.aafe||""} onChange={e => updatePad(p => ({...p,extracciones:p.extracciones.map((x,i)=>i===idx?{...x,aafe:e.target.value}:x)}))}/></td>
+                                <td><input value={ext.servicio||""} onChange={e => updatePad(p => ({...p,extracciones:p.extracciones.map((x,i)=>i===idx?{...x,servicio:e.target.value}:x)}))}/></td>
+                                <td><select style={{border:"none",background:"transparent",padding:"6px",width:"100%",fontSize:12}} value={ext.confirmado||""} onChange={e => updatePad(p => ({...p,extracciones:p.extracciones.map((x,i)=>i===idx?{...x,confirmado:e.target.value}:x)}))}>
+                                  <option value="">—</option><option value="si">Sí</option><option value="no">No</option><option value="falta">Falta</option>
+                                </select></td>
+                                <td><input value={ext.pagado||""} onChange={e => updatePad(p => ({...p,extracciones:p.extracciones.map((x,i)=>i===idx?{...x,pagado:e.target.value}:x)}))}/></td>
+                                <td><button onClick={() => { if(window.confirm("¿Eliminar?")) updatePad(p => ({...p,extracciones:p.extracciones.filter((_,i)=>i!==idx)})); }} style={{background:"none",border:"none",color:"var(--rust)",cursor:"pointer"}}>✕</button></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    <div className="ficha-actions"><button className="btn-save" onClick={() => showToast("Guardado ✓")}>Guardar</button></div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
           {/* ── INTERNACIÓN VIEW ── */}
           {view === "internacion" && (
@@ -2389,6 +2528,34 @@ function App() {
           })()}
 
         {/* ── MODALS ── */}
+        {modal === "addPadrillo" && (
+          <div className="modal-overlay" onClick={() => setModal(null)}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-title">Nuevo padrillo</div>
+              <div className="form-grid" style={{marginBottom:14}}>
+                {[["nombre","Nombre *"],["raza","Raza"],["pelaje","Pelaje"],["born","Año nacimiento"],["propietario","Propietario"]].map(([k,lbl]) => (
+                  <div key={k} className="form-group"><label>{lbl}</label>
+                    <input value={newPadrillo[k]||""} onChange={e => setNewPadrillo(p => ({...p,[k]:e.target.value}))} />
+                  </div>
+                ))}
+                <div className="form-group full"><label>Reseña</label>
+                  <textarea rows={2} value={newPadrillo.reseña||""} onChange={e => setNewPadrillo(p => ({...p,reseña:e.target.value}))} />
+                </div>
+              </div>
+              <div className="modal-actions">
+                <button className="btn-secondary" onClick={() => setModal(null)}>Cancelar</button>
+                <button className="btn-save" onClick={() => {
+                  if (!newPadrillo.nombre.trim()) return;
+                  const pad = { id: Date.now(), ...newPadrillo, espermogramas:[], extracciones:[] };
+                  setPadrillosList(l => [...l, pad]);
+                  setNewPadrillo({ nombre:"", raza:"", pelaje:"", born:"", propietario:"", reseña:"" });
+                  setModal(null); showToast(`${pad.nombre} agregado`);
+                }}>Agregar</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {modal === "addHaras" && (
           <div className="modal-overlay" onClick={() => setModal(null)}>
             <div className="modal" onClick={e => e.stopPropagation()}>
